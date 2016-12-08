@@ -98,5 +98,7 @@ extern uint32 dhcps_lease_time;
 void dhcps_start(struct ip_info *info);
 void dhcps_stop(void);
 
+void dhcps_set_DNS(struct ip_addr *dns_ip;);
+
 #endif
 
