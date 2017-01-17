@@ -1655,8 +1655,6 @@ tcp_debug_print_pcbs(void)
   }    
 }
 
-#endif /* TCP_DEBUG */
-
 /**
  * Check state consistency of the tcp_pcb lists.
  */
@@ -1674,5 +1672,6 @@ tcp_pcbs_sane(void)
   }
   return 1;
 }
+#endif /* TCP_DEBUG */
 
 #endif /* LWIP_TCP */
