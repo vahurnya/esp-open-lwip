@@ -495,7 +495,23 @@
  * interface, define this to 0.
  */
 #ifndef IP_FORWARD
-#define IP_FORWARD                      0
+#define IP_FORWARD                      1
+#endif
+
+/**
+ * IP_NAPT==1: Enables the ability to do Network Address Port Translation (NAPT) 
+ * on forwarded packets. This only makes sense with IP_FORWARD==1.
+ */
+#ifndef IP_NAPT
+#define IP_NAPT                         1
+#endif
+
+/**
+ * IP_NAPT_DYNAMIC==1: Saves the memory for the NAPT tables if not required.
+ * If NAPT is used, ip_napt_init() has to be called explicitly once.
+ */
+#ifndef IP_NAPT_DYNAMIC
+#define IP_NAPT_DYNAMIC                 0
 #endif
 
 /**
@@ -953,7 +969,7 @@
  * an upper limit on the MSS advertised by the remote host.
  */
 #ifndef TCP_MSS
-#define TCP_MSS                         1460
+#define TCP_MSS                         536
 #endif
 #endif
 
@@ -974,7 +990,7 @@
  * TCP_SND_BUF: TCP sender buffer space (bytes). 
  */
 #ifndef TCP_SND_BUF
-#define TCP_SND_BUF                     2 * TCP_MSS
+#define TCP_SND_BUF                     (2 * TCP_MSS)
 #endif
 
 /**
@@ -1051,6 +1067,11 @@
 #ifndef TCP_WND_UPDATE_THRESHOLD
 #define TCP_WND_UPDATE_THRESHOLD   (TCP_WND / 4)
 #endif
+
+/**
+ * 2 * TCP_MSL defines duration of socket TIME-WAIT state in ms.
+ */
+#define TCP_MSL 2500UL
 
 /**
  * LWIP_EVENT_API and LWIP_CALLBACK_API: Only one of these should be set to 1.
@@ -1456,7 +1477,7 @@
  * SO_REUSE==1: Enable SO_REUSEADDR option.
  */
 #ifndef SO_REUSE
-#define SO_REUSE                        0
+#define SO_REUSE                        1
 #endif
 
 /**
@@ -1486,7 +1507,7 @@
  * LWIP_STATS_DISPLAY==1: Compile in the statistics output functions.
  */
 #ifndef LWIP_STATS_DISPLAY
-#define LWIP_STATS_DISPLAY              0
+#define LWIP_STATS_DISPLAY              1
 #endif
 
 /**

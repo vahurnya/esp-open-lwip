@@ -56,6 +56,7 @@
 #include "lwip/dns.h"
 #include "lwip/timers.h"
 #include "netif/etharp.h"
+#include "lwip/lwip_napt.h"
 
 /* Compile-time sanity checks for configuration errors.
  * These can be done independently of LWIP_DEBUG, without penalty.
@@ -322,4 +323,8 @@ lwip_init(void)
 #if LWIP_TIMERS
   sys_timeouts_init();
 #endif /* LWIP_TIMERS */
+
+#if IP_NAPT && !IP_NAPT_DYNAMIC
+  ip_napt_init(IP_NAPT_MAX, IP_PORTMAP_MAX);
+#endif /* IP_NAPT */
 }
