@@ -1170,7 +1170,7 @@ void ICACHE_FLASH_ATTR dhcps_set_mapping(struct ip_addr *addr, uint8 *mac, uint3
 list_node *pback_node = NULL;
 list_node *pnode = NULL;
 struct dhcps_pool *pdhcps_pool = NULL;
-os_printf("Enter one\r\n");
+
 	pdhcps_pool = (struct dhcps_pool *)os_zalloc(sizeof(struct dhcps_pool));
 	pdhcps_pool->ip.addr = addr->addr;
 	os_memcpy(pdhcps_pool->mac, mac, sizeof(pdhcps_pool->mac));
