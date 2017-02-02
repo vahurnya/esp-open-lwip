@@ -49,6 +49,7 @@ struct portmap_table {
   u8 valid;
 };
 
+extern struct portmap_table *ip_portmap_table;
 
 /**
  * Allocates and initializes the NAPT tables.

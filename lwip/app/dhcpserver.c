@@ -47,6 +47,7 @@ void ICACHE_FLASH_ATTR node_insert_to_list(list_node **phead, list_node* pinsert
 	list_node *plist = NULL;
 	struct dhcps_pool *pdhcps_pool = NULL;
 	struct dhcps_pool *pdhcps_node = NULL;
+
 	if (*phead == NULL)
 		*phead = pinsert;
 	else {
@@ -1152,4 +1153,30 @@ uint32 ICACHE_FLASH_ATTR wifi_softap_get_dhcps_lease_time(void) // minute
 void ICACHE_FLASH_ATTR dhcps_set_DNS(struct ip_addr *dns_ip) 
 {
     dns_address = *dns_ip;
+}
+
+struct dhcps_pool *ICACHE_FLASH_ATTR dhcps_get_mapping(uint16_t no) 
+{
+list_node *pback_node = NULL;
+
+	for (pback_node = plist; pback_node != NULL;pback_node = pback_node->pnext, no--) {
+	  if (no == 0) return pback_node->pnode;
+	}
+	return NULL;
+}
+
+void ICACHE_FLASH_ATTR dhcps_set_mapping(struct ip_addr *addr, uint8 *mac, uint32 lease_time) 
+{
+list_node *pback_node = NULL;
+list_node *pnode = NULL;
+struct dhcps_pool *pdhcps_pool = NULL;
+os_printf("Enter one\r\n");
+	pdhcps_pool = (struct dhcps_pool *)os_zalloc(sizeof(struct dhcps_pool));
+	pdhcps_pool->ip.addr = addr->addr;
+	os_memcpy(pdhcps_pool->mac, mac, sizeof(pdhcps_pool->mac));
+	pdhcps_pool->lease_timer = lease_time;
+	pnode = (list_node *)os_zalloc(sizeof(list_node ));
+	pnode->pnode = pdhcps_pool;
+	pnode->pnext = NULL;
+	node_insert_to_list(&plist,pnode);
 }

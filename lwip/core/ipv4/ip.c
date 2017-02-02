@@ -210,7 +210,7 @@ ip_router(ip_addr_t *dest, ip_addr_t *source){
 u16_t napt_list = NO_IDX, napt_list_last = NO_IDX, napt_free = 0;
 
 static struct napt_table *ip_napt_table;
-static struct portmap_table *ip_portmap_table;
+struct portmap_table *ip_portmap_table;
 
 int nr_active_napt_tcp = 0, nr_active_napt_udp = 0, nr_active_napt_icmp = 0;
 uint16_t ip_napt_max = 0;
@@ -222,7 +222,7 @@ ip_napt_init(uint16_t max_nat, uint8_t max_portmap)
   u16_t i;
 
   ip_napt_max = max_nat;
-  uint8_t ip_portmap_max = max_portmap;
+  ip_portmap_max = max_portmap;
 
   ip_napt_table = (struct napt_table*)os_zalloc(sizeof(struct napt_table[ip_napt_max]));
   ip_portmap_table = (struct portmap_table*)os_zalloc(sizeof(struct portmap_table[ip_portmap_max]));
@@ -503,6 +503,7 @@ ip_portmap_add(u8_t proto, u32_t maddr, u16_t mport, u32_t daddr, u16_t dport)
   mport = PP_HTONS(mport);
   dport = PP_HTONS(dport);
   int i;
+
   for (i = 0; i < ip_portmap_max; i++) {
     struct portmap_table *p = &ip_portmap_table[i];
     if (p->valid && p->proto == proto && p->mport == mport) {
