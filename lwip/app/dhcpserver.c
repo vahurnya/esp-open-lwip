@@ -906,7 +906,7 @@ void ICACHE_FLASH_ATTR dhcps_start(struct ip_info *info)
 	wifi_softap_init_dhcps_lease(server_address.addr);
 	client_address_plus.addr = dhcps_lease.start_ip.addr;
 
-	udp_bind(pcb_dhcps, IP_ADDR_ANY, DHCPS_SERVER_PORT);
+	udp_bind(pcb_dhcps, &info->ip, DHCPS_SERVER_PORT);
 	udp_recv(pcb_dhcps, handle_dhcp, NULL);
 #if DHCPS_DEBUG
 	os_printf("dhcps:dhcps_start->udp_recv function Set a receive callback handle_dhcp for UDP_PCB pcb_dhcps\n");
