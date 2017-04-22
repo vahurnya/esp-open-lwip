@@ -27,7 +27,7 @@ static struct ip_addr server_address;
 static struct ip_addr client_address;//added
 static struct ip_addr client_address_plus;
 
-static struct ip_addr dns_address;
+static struct ip_addr dns_address = {0};;
 
 static struct dhcps_lease dhcps_lease;
 //static bool dhcps_lease_flag = true;
@@ -901,7 +901,9 @@ void ICACHE_FLASH_ATTR dhcps_start(struct ip_info *info)
 	IP4_ADDR(&broadcast_dhcps, 255, 255, 255, 255);
 
 	server_address = info->ip;
-        dns_address = server_address;
+	if (dns_address.addr == 0) {
+		dns_address = server_address;
+	}
 
 	wifi_softap_init_dhcps_lease(server_address.addr);
 	client_address_plus.addr = dhcps_lease.start_ip.addr;
