@@ -27,7 +27,7 @@ static struct ip_addr server_address;
 static struct ip_addr client_address;//added
 static struct ip_addr client_address_plus;
 
-static struct ip_addr dns_address = {0};;
+static struct ip_addr dns_address = {0};
 
 static struct dhcps_lease dhcps_lease;
 //static bool dhcps_lease_flag = true;
@@ -479,7 +479,7 @@ static void ICACHE_FLASH_ATTR send_ack(struct dhcps_msg *m)
  * @param optptr DHCP msg�е���������
  * @param len ��������Ĵ��?(byte)
  *
- * @return uint8_t ���ش�����DHCP Server״ֵ̬
+ * @return uint8_t ���ش�����DHCP Server״ֵ̬
  */
 ///////////////////////////////////////////////////////////////////////////////////
 static uint8_t ICACHE_FLASH_ATTR parse_options(uint8_t *optptr, sint16_t len)
@@ -737,8 +737,8 @@ static sint16_t ICACHE_FLASH_ATTR parse_msg(struct dhcps_msg *m, u16_t len)
  * @param arg
  * @param pcb ���յ�UDP��Ŀ��ƿ�?
  * @param p ���յ���UDP�е��������?
- * @param addr ���ʹ�UDP���Դ�����IP��ַ
- * @param port ���ʹ�UDP���Դ�����UDPͨ���˿ں�
+ * @param addr ���ʹ�UDP���Դ�����IP��ַ
+ * @param port ���ʹ�UDP���Դ�����UDPͨ���˿ں�
  */
 ///////////////////////////////////////////////////////////////////////////////////
 static void ICACHE_FLASH_ATTR handle_dhcp(void *arg, 
