@@ -344,6 +344,8 @@ ip_napt_free(struct napt_table *t)
   if (t->proto == IP_PROTO_ICMP)
     nr_active_napt_icmp--;
 #endif
+  LWIP_DEBUGF(NAPT_DEBUG, ("ip_napt_free\n"));
+  napt_debug_print();
 }
 
 #if LWIP_TCP
@@ -419,6 +421,16 @@ ip_napt_find(u8_t proto, u32_t addr, u16_t port, u16_t mport, u8_t dest)
 {
   u16_t i, next;
   struct napt_table *t;
+
+  LWIP_DEBUGF(NAPT_DEBUG, ("ip_napt_find\n"));
+  LWIP_DEBUGF(NAPT_DEBUG, ("looking up in table %s: %"U16_F".%"U16_F".%"U16_F".%"U16_F", port: %u, mport: %u\n",
+					(dest ? "dest" : "src"),
+                    ip4_addr1_16(&addr), ip4_addr2_16(&addr),
+                    ip4_addr3_16(&addr), ip4_addr4_16(&addr),
+                    PP_HTONS(port),
+                    PP_HTONS(mport)));
+  napt_debug_print();
+
   u32_t now = sys_now();
   for (i = napt_list; i != NO_IDX; i = next) {
     t = NT(i);
@@ -446,15 +458,18 @@ ip_napt_find(u8_t proto, u32_t addr, u16_t port, u16_t mport, u8_t dest)
 #endif
     if (dest == 0 && t->proto == proto && t->src == addr && t->sport == port) {
       t->last = now;
+      LWIP_DEBUGF(NAPT_DEBUG, ("found\n"));
       return t;
     }
     if (dest == 1 && t->proto == proto && t->dest == addr && t->dport == port 
         && t->mport == mport) {
       t->last = now;
+      LWIP_DEBUGF(NAPT_DEBUG, ("found\n"));
       return t;
     }
   }
 
+  LWIP_DEBUGF(NAPT_DEBUG, ("not found\n"));
   return NULL;
 }
 
@@ -469,6 +484,10 @@ ip_napt_add(u8_t proto, u32_t src, u16_t sport, u32_t dest, u16_t dport)
     /* move this entry to the top of napt_list */
     ip_napt_free(t);
     ip_napt_insert(t);
+
+    LWIP_DEBUGF(NAPT_DEBUG, ("ip_napt_add\n"));
+    napt_debug_print();
+
     return t->mport;
   }
   t = NT(napt_free);
@@ -491,6 +510,10 @@ ip_napt_add(u8_t proto, u32_t src, u16_t sport, u32_t dest, u16_t dport)
     t->proto = proto;
     t->fin1 = t->fin2 = t->finack1 = t->finack2 = t->synack = t->rst = 0;
     ip_napt_insert(t);
+
+    LWIP_DEBUGF(NAPT_DEBUG, ("ip_napt_add\n"));
+    napt_debug_print();
+
     return mport;
   }
   os_printf("NAT table full\n");
@@ -647,6 +670,18 @@ ip_napt_recv(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
 #if LWIP_TCP
   if (IPH_PROTO(iphdr) == IP_PROTO_TCP) {
     struct tcp_hdr *tcphdr = (struct tcp_hdr *)((u8_t *)p->payload + IPH_HL(iphdr) * 4);
+
+    LWIP_DEBUGF(NAPT_DEBUG, ("ip_napt_recv\n"));
+    LWIP_DEBUGF(NAPT_DEBUG, ("src: %"U16_F".%"U16_F".%"U16_F".%"U16_F", dest: %"U16_F".%"U16_F".%"U16_F".%"U16_F", ",
+      ip4_addr1_16(&iphdr->src), ip4_addr2_16(&iphdr->src),
+      ip4_addr3_16(&iphdr->src), ip4_addr4_16(&iphdr->src),
+      ip4_addr1_16(&iphdr->dest), ip4_addr2_16(&iphdr->dest),
+      ip4_addr3_16(&iphdr->dest), ip4_addr4_16(&iphdr->dest)));
+	  
+      LWIP_DEBUGF(NAPT_DEBUG, ("sport %u, dport: %u\n",
+                        PP_HTONS(tcphdr->src),
+                        PP_HTONS(tcphdr->dest)));
+
     m = ip_portmap_find(IP_PROTO_TCP, tcphdr->dest);
     if (m) {
       /* packet to mapped port: rewrite destination */
@@ -1542,3 +1577,38 @@ ip_debug_print(struct pbuf *p)
   LWIP_DEBUGF(IP_DEBUG, ("+-------------------------------+\n"));
 }
 #endif /* IP_DEBUG */
+
+#if NAPT_DEBUG
+/* Print NAPT table using LWIP_DEBUGF
+ */
+void
+napt_debug_print()
+{
+  int i, next;
+  LWIP_DEBUGF(NAPT_DEBUG, ("NAPT table:\n"));
+  LWIP_DEBUGF(NAPT_DEBUG, (" src                     dest                    sport   dport   mport   \n"));
+  LWIP_DEBUGF(NAPT_DEBUG, ("+-----------------------+-----------------------+-------+-------+-------+\n"));
+  for (i = napt_list; i != NO_IDX; i = next) {
+    struct napt_table *t = &ip_napt_table[i];
+    next = t->next;
+
+    LWIP_DEBUGF(NAPT_DEBUG, ("| %3"U16_F" | %3"U16_F" | %3"U16_F" | %3"U16_F" |",
+                      ip4_addr1_16(&t->src),
+                      ip4_addr2_16(&t->src),
+                      ip4_addr3_16(&t->src),
+                      ip4_addr4_16(&t->src)));
+
+    LWIP_DEBUGF(NAPT_DEBUG, (" %3"U16_F" | %3"U16_F" | %3"U16_F" | %3"U16_F" |",
+                      ip4_addr1_16(&t->dest),
+                      ip4_addr2_16(&t->dest),
+                      ip4_addr3_16(&t->dest),
+                      ip4_addr4_16(&t->dest)));
+
+    LWIP_DEBUGF(NAPT_DEBUG, (" %5"U16_F" | %5"U16_F" | %5"U16_F" |\n",
+                      PP_HTONS(t->sport),
+                      PP_HTONS(t->dport),
+                      PP_HTONS(t->mport)));
+
+  }
+}
+#endif /* NAPT_DEBUG */
