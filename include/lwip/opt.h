@@ -2044,4 +2044,11 @@
 #define DNS_DEBUG                       LWIP_DBG_OFF
 #endif
 
+/**
+ * NAPT_DEBUG: Enable debugging for NAPT.
+ */
+#ifndef NAPT_DEBUG
+#define NAPT_DEBUG                       LWIP_DBG_OFF
+#endif
+
 #endif /* __LWIP_OPT_H__ */
