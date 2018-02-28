@@ -212,6 +212,11 @@ void napt_debug_print()ICACHE_FLASH_ATTR;
 #define napt_debug_print(p)
 #endif /* NAPT_DEBUG */
 
+#ifdef IP_ROUTING_TAB
+bool ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw);
+void ip_delete_routes(void);
+#endif /* IP_ROUTING_TAB */
+
 #ifdef __cplusplus
 }
 #endif

@@ -37,6 +37,7 @@
  * Author: Adam Dunkels <adam@sics.se>
  *
  */
+#define IP_ROUTING_TAB
 
 #include "lwip/opt.h"
 #include "lwip/ip.h"
@@ -112,6 +113,37 @@ ip_addr_t current_iphdr_dest;
 /** The IP header ID of the next outgoing IP packet */
 static u16_t ip_id;
 
+#ifdef IP_ROUTING_TAB
+struct route_entry {
+    ip_addr_t ip;
+    ip_addr_t mask;
+    ip_addr_t gw;
+};
+
+#define MAX_ROUTES 10
+struct route_entry rt_table[MAX_ROUTES];
+int route_max = 0;
+
+bool ICACHE_FLASH_ATTR
+ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
+{
+  if (route_max == MAX_ROUTES)
+    return false;
+
+  ip_addr_copy(rt_table[route_max].ip, ip);
+  ip_addr_copy(rt_table[route_max].mask, mask);
+  ip_addr_copy(rt_table[route_max].gw, gw);
+  route_max++;
+  return true;
+}
+
+void ICACHE_FLASH_ATTR
+ip_delete_routes(void)
+{
+  route_max = 0;
+}
+#endif /* IP_ROUTING_TAB */
+
 /**
  * Finds the appropriate network interface for a given IP address. It
  * searches the list of network interfaces linearly. A match is found
@@ -121,10 +153,24 @@ static u16_t ip_id;
  * @param dest the destination IP address for which to find the route
  * @return the netif on which to send to reach dest
  */
-struct netif *
+struct netif *ICACHE_FLASH_ATTR
 ip_route(ip_addr_t *dest)
 {
   struct netif *netif;
+
+#ifdef IP_ROUTING_TAB
+  int i;
+
+  /* search backwards, latest added route first */
+  for (i = route_max-1; i>=0; i--) {
+    if (ip_addr_netcmp(dest, &rt_table[i].ip, &rt_table[i].mask)) {
+      ip_addr_copy(current_iphdr_dest, rt_table[i].gw);
+      /* go on to find the netif on which to forward the packet */
+      dest = &current_iphdr_dest;
+      break;
+    }
+  }
+#endif /* IP_ROUTING_TAB */
 
   /* iterate through netifs */
   for(netif = netif_list; netif != NULL; netif = netif->next) {
@@ -145,6 +191,7 @@ ip_route(ip_addr_t *dest)
       }
     }
   }
+
   if ((netif_default == NULL) || (!netif_is_up(netif_default))) {
     LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: No route to %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
       ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
@@ -877,6 +924,11 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   }
 
   /* Find network interface where to forward this IP packet to. */
+#ifdef IP_ROUTING_TAB
+  ip_addr_t old_dest;
+  /* copy it - maybe changed by routing */
+  ip_addr_copy(old_dest, current_iphdr_dest);
+#endif
   netif = ip_route(&current_iphdr_dest);
   if (netif == NULL) {
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: no forwarding route for %"U16_F".%"U16_F".%"U16_F".%"U16_F" found\n",
@@ -886,7 +938,12 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   }
   /* Do not forward packets onto the same network interface on which
    * they arrived. */
-  if (netif == inp) {
+  if (netif == inp 
+#ifdef IP_ROUTING_TAB
+      /* ... except if it had been routed to another gw */
+      && ip_addr_cmp(&old_dest, &current_iphdr_dest)
+#endif
+      ) {
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: not bouncing packets back on incoming interface.\n"));
     goto return_noroute;
   }
