@@ -1,6 +1,6 @@
 # Open lwIP with NAT and SLIP for the esp8266
 
-# NAT
+## NAT
 The new functions are exported in the "lwip/lwip_napt.h" header. NAPT should be enabled on the SoftAP interface of the ESP (this is typically the interface with netif.num == 1).
 
 The additional NAPT functionality is enabled by the options IP_FORWARD, IP_NAPT, and IP_NAPT_DYNAMIC in "lwipopts.h".
@@ -11,5 +11,15 @@ It is based on neocat's NAPT extensions: https://github.com/NeoCat/esp8266-Ardui
 
 Fixes some issues I had with checksums and timers and can be used for full WiFi repeater functionality. If you want to use it as a permanent replacement for liblwib.a you might want to add the option IP_NAPT_DYNAMIC = 1. With this option the memory for the NAPT tables is allocated only, if ip_napt_init(max_nat, max_portmap) is called explicitly before enabling NAPT.
 
-# SLIP
+## SLIP
 This stack also supports SLIP (Serial Line IP) interfaces via UARTs. To get this up and running, you will need an appropriate UART-driver and some initialization in the main program. You can find a demo at: https://github.com/martin-ger/esp_slip_router
+
+## Static Routing Table
+IPv4 now has a static routing table. In "ip.h" there are two new functions:
+```
+/* Add a static route as top entry */
+bool ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw);
+
+/* Delete all static routes */
+void ip_delete_routes(void);
+```
