@@ -37,7 +37,6 @@
  * Author: Adam Dunkels <adam@sics.se>
  *
  */
-#define IP_ROUTING_TAB
 
 #include "lwip/opt.h"
 #include "lwip/ip.h"
@@ -56,6 +55,7 @@
 #include "lwip/autoip.h"
 #include "lwip/stats.h"
 #include "lwip/lwip_napt.h"
+#include "lwip/ip_route.h"
 #include "arch/perf.h"
 
 #include <string.h>
@@ -137,6 +137,23 @@ ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
   return true;
 }
 
+bool ICACHE_FLASH_ATTR
+ip_rm_route(ip_addr_t ip, ip_addr_t mask)
+{
+  int i;
+
+  for (i = 0; i<route_max; i++) {
+    if (ip_addr_cmp(&ip, &rt_table[i].ip) && ip_addr_cmp(&mask, &rt_table[i].mask)) {
+      for (i = i+1; i<route_max; i++) {
+	rt_table[i-1] = rt_table[i];    
+      }
+      route_max--;
+      return true;
+    }
+  }
+  return false;
+}
+
 void ICACHE_FLASH_ATTR
 ip_delete_routes(void)
 {
@@ -158,20 +175,6 @@ ip_route(ip_addr_t *dest)
 {
   struct netif *netif;
 
-#ifdef IP_ROUTING_TAB
-  int i;
-
-  /* search backwards, latest added route first */
-  for (i = route_max-1; i>=0; i--) {
-    if (ip_addr_netcmp(dest, &rt_table[i].ip, &rt_table[i].mask)) {
-      ip_addr_copy(current_iphdr_dest, rt_table[i].gw);
-      /* go on to find the netif on which to forward the packet */
-      dest = &current_iphdr_dest;
-      break;
-    }
-  }
-#endif /* IP_ROUTING_TAB */
-
   /* iterate through netifs */
   for(netif = netif_list; netif != NULL; netif = netif->next) {
     /* network mask matches? */
@@ -191,6 +194,26 @@ ip_route(ip_addr_t *dest)
       }
     }
   }
+
+#ifdef IP_ROUTING_TAB
+  int i;
+
+  /* search backwards, latest added route first */
+  for (i = route_max-1; i>=0; i--) {
+    if (ip_addr_netcmp(dest, &rt_table[i].ip, &rt_table[i].mask)) {
+      if (ip_addr_cmp(dest, &rt_table[i].gw)) {
+        LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: routing loop for %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
+          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
+        IP_STATS_INC(ip.rterr);
+        snmp_inc_ipoutnoroutes();
+        return NULL;
+      }
+      ip_addr_copy(current_iphdr_dest, rt_table[i].gw);
+      /* now go and find the netif on which to forward the packet */
+      return ip_route(&current_iphdr_dest);
+    }
+  }
+#endif /* IP_ROUTING_TAB */
 
   if ((netif_default == NULL) || (!netif_is_up(netif_default))) {
     LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: No route to %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",

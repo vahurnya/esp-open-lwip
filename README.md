@@ -1,4 +1,4 @@
-# Open lwIP with NAT, SLIP, and Static routing for the ESP8266
+# Open lwIP with NAT, SLIP, and static routing for the ESP8266
 
 ## NAT
 The new functions are exported in the "lwip/lwip_napt.h" header. NAPT should be enabled on the SoftAP interface of the ESP (this is typically the interface with netif.num == 1).
@@ -18,10 +18,13 @@ This stack also supports SLIP (Serial Line IP) interfaces via UARTs. To get this
 
 *experimental!*
 
-IPv4 now has a static routing table. In "ip.h" there are two new functions:
+IPv4 now has a static routing table. In "ip_route.h" there are these new functions:
 ```
 /* Add a static route as top entry */
 bool ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw);
+
+/* Removes a static route entry */
+bool ip_rm_route(ip_addr_t ip, ip_addr_t mask)
 
 /* Delete all static routes */
 void ip_delete_routes(void);
