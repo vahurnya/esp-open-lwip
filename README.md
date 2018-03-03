@@ -23,9 +23,12 @@ IPv4 now has a static routing table. In "ip_route.h" there are these new functio
 /* Add a static route as top entry */
 bool ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw);
 
-/* Removes a static route entry */
-bool ip_rm_route(ip_addr_t ip, ip_addr_t mask)
+/* Remove a static route entry */
+bool ip_rm_route(ip_addr_t ip, ip_addr_t mask);
 
 /* Delete all static routes */
 void ip_delete_routes(void);
+
+/* Returns the n_th entry of the routing table */
+bool ip_get_route(uint32_t no, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw);
 ```

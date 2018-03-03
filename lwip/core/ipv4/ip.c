@@ -55,7 +55,9 @@
 #include "lwip/autoip.h"
 #include "lwip/stats.h"
 #include "lwip/lwip_napt.h"
+#ifdef IP_ROUTING_TAB
 #include "lwip/ip_route.h"
+#endif
 #include "arch/perf.h"
 
 #include <string.h>
@@ -114,26 +116,19 @@ ip_addr_t current_iphdr_dest;
 static u16_t ip_id;
 
 #ifdef IP_ROUTING_TAB
-struct route_entry {
-    ip_addr_t ip;
-    ip_addr_t mask;
-    ip_addr_t gw;
-};
-
-#define MAX_ROUTES 10
-struct route_entry rt_table[MAX_ROUTES];
-int route_max = 0;
+struct route_entry ip_rt_table[MAX_ROUTES];
+int ip_route_max = 0;
 
 bool ICACHE_FLASH_ATTR
 ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
 {
-  if (route_max == MAX_ROUTES)
+  if (ip_route_max == MAX_ROUTES)
     return false;
 
-  ip_addr_copy(rt_table[route_max].ip, ip);
-  ip_addr_copy(rt_table[route_max].mask, mask);
-  ip_addr_copy(rt_table[route_max].gw, gw);
-  route_max++;
+  ip_addr_copy(ip_rt_table[ip_route_max].ip, ip);
+  ip_addr_copy(ip_rt_table[ip_route_max].mask, mask);
+  ip_addr_copy(ip_rt_table[ip_route_max].gw, gw);
+  ip_route_max++;
   return true;
 }
 
@@ -142,12 +137,12 @@ ip_rm_route(ip_addr_t ip, ip_addr_t mask)
 {
   int i;
 
-  for (i = 0; i<route_max; i++) {
-    if (ip_addr_cmp(&ip, &rt_table[i].ip) && ip_addr_cmp(&mask, &rt_table[i].mask)) {
-      for (i = i+1; i<route_max; i++) {
-	rt_table[i-1] = rt_table[i];    
+  for (i = 0; i<ip_route_max; i++) {
+    if (ip_addr_cmp(&ip, &ip_rt_table[i].ip) && ip_addr_cmp(&mask, &ip_rt_table[i].mask)) {
+      for (i = i+1; i<ip_route_max; i++) {
+	ip_rt_table[i-1] = ip_rt_table[i];    
       }
-      route_max--;
+      ip_route_max--;
       return true;
     }
   }
@@ -157,8 +152,22 @@ ip_rm_route(ip_addr_t ip, ip_addr_t mask)
 void ICACHE_FLASH_ATTR
 ip_delete_routes(void)
 {
-  route_max = 0;
+  ip_route_max = 0;
 }
+
+bool ICACHE_FLASH_ATTR
+ip_get_route(uint32_t no, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw)
+{
+  if (no >= ip_route_max)
+    return false;
+  /* searched backwards */
+  no = ip_route_max-no-1;
+  ip_addr_copy(*ip, ip_rt_table[no].ip);
+  ip_addr_copy(*mask, ip_rt_table[no].mask);
+  ip_addr_copy(*gw, ip_rt_table[no].gw);
+  return true;
+}
+
 #endif /* IP_ROUTING_TAB */
 
 /**
@@ -199,16 +208,16 @@ ip_route(ip_addr_t *dest)
   int i;
 
   /* search backwards, latest added route first */
-  for (i = route_max-1; i>=0; i--) {
-    if (ip_addr_netcmp(dest, &rt_table[i].ip, &rt_table[i].mask)) {
-      if (ip_addr_cmp(dest, &rt_table[i].gw)) {
+  for (i = ip_route_max-1; i>=0; i--) {
+    if (ip_addr_netcmp(dest, &ip_rt_table[i].ip, &ip_rt_table[i].mask)) {
+      if (ip_addr_cmp(dest, &ip_rt_table[i].gw)) {
         LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: routing loop for %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
           ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
         IP_STATS_INC(ip.rterr);
         snmp_inc_ipoutnoroutes();
         return NULL;
       }
-      ip_addr_copy(current_iphdr_dest, rt_table[i].gw);
+      ip_addr_copy(current_iphdr_dest, ip_rt_table[i].gw);
       /* now go and find the netif on which to forward the packet */
       return ip_route(&current_iphdr_dest);
     }
