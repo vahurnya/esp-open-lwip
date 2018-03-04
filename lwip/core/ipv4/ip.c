@@ -116,6 +116,9 @@ ip_addr_t current_iphdr_dest;
 static u16_t ip_id;
 
 #ifdef IP_ROUTING_TAB
+/** Destination IP address of current_header after routing */
+ip_addr_t current_ip_new_dest;
+
 struct route_entry ip_rt_table[MAX_ROUTES];
 int ip_route_max = 0;
 
@@ -184,6 +187,10 @@ ip_route(ip_addr_t *dest)
 {
   struct netif *netif;
 
+#ifdef IP_ROUTING_TAB
+  ip_addr_copy(current_ip_new_dest, *dest);
+#endif
+
   /* iterate through netifs */
   for(netif = netif_list; netif != NULL; netif = netif->next) {
     /* network mask matches? */
@@ -194,19 +201,11 @@ ip_route(ip_addr_t *dest)
       }
     }
   }
-  /* iterate through netifs */
-  for(netif = netif_list; netif != NULL; netif = netif->next) {
-    /* network mask matches? */
-    if (netif_is_up(netif)) {
-      if (!ip_addr_isbroadcast(dest, netif) && netif == (struct netif *)eagle_lwip_getif(0)) {
-        return netif;
-      }
-    }
-  }
 
 #ifdef IP_ROUTING_TAB
   int i;
-
+//os_printf_plus("ip_route route to %d.%d.%d.%d\r\n",
+//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); ;  
   /* search backwards, latest added route first */
   for (i = ip_route_max-1; i>=0; i--) {
     if (ip_addr_netcmp(dest, &ip_rt_table[i].ip, &ip_rt_table[i].mask)) {
@@ -217,12 +216,26 @@ ip_route(ip_addr_t *dest)
         snmp_inc_ipoutnoroutes();
         return NULL;
       }
-      ip_addr_copy(current_iphdr_dest, ip_rt_table[i].gw);
+
+      ip_addr_copy(current_ip_new_dest, ip_rt_table[i].gw);
+//os_printf_plus("ip_route route through %d.%d.%d.%d\r\n",
+//          ip4_addr1_16(&current_ip_new_dest), ip4_addr2_16(&current_ip_new_dest), ip4_addr3_16(&current_ip_new_dest), ip4_addr4_16(&current_ip_new_dest)); ;  
+
       /* now go and find the netif on which to forward the packet */
-      return ip_route(&current_iphdr_dest);
+      return ip_route(&current_ip_new_dest);
     }
   }
 #endif /* IP_ROUTING_TAB */
+
+  /* iterate through netifs */
+  for(netif = netif_list; netif != NULL; netif = netif->next) {
+    /* network mask matches? */
+    if (netif_is_up(netif)) {
+      if (!ip_addr_isbroadcast(dest, netif) && netif == (struct netif *)eagle_lwip_getif(0)) {
+        return netif;
+      }
+    }
+  }
 
   if ((netif_default == NULL) || (!netif_is_up(netif_default))) {
     LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: No route to %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
@@ -956,11 +969,6 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   }
 
   /* Find network interface where to forward this IP packet to. */
-#ifdef IP_ROUTING_TAB
-  ip_addr_t old_dest;
-  /* copy it - maybe changed by routing */
-  ip_addr_copy(old_dest, current_iphdr_dest);
-#endif
   netif = ip_route(&current_iphdr_dest);
   if (netif == NULL) {
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: no forwarding route for %"U16_F".%"U16_F".%"U16_F".%"U16_F" found\n",
@@ -973,12 +981,17 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   if (netif == inp 
 #ifdef IP_ROUTING_TAB
       /* ... except if it had been routed to another gw */
-      && ip_addr_cmp(&old_dest, &current_iphdr_dest)
+      && ip_addr_cmp(&current_ip_new_dest, &current_iphdr_dest)
 #endif
       ) {
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: not bouncing packets back on incoming interface.\n"));
     goto return_noroute;
   }
+
+#ifdef IP_ROUTING_TAB
+  /* copy it - just in case there is a new dest after routing */
+  ip_addr_copy(current_iphdr_dest, current_ip_new_dest);
+#endif
 
   /* decrement TTL */
   IPH_TTL_SET(iphdr, IPH_TTL(iphdr) - 1);
@@ -1510,6 +1523,15 @@ err_t ip_output_if_opt(struct pbuf *p, ip_addr_t *src, ip_addr_t *dest,
     dest = &dest_addr;
   }
 
+#ifdef IP_ROUTING_TAB
+  struct netif *new_netif = ip_route(dest);
+  if (!ip_addr_cmp(dest, &current_ip_new_dest)) {
+    //os_printf_plus("We changeed the routing in ip_output_if_opt\r\n");
+    ip_addr_copy(*dest, current_ip_new_dest);
+    netif = new_netif;
+  }
+#endif
+
   IP_STATS_INC(ip.xmit);
 
   LWIP_DEBUGF(IP_DEBUG, ("ip_output_if: %c%c%"U16_F"\n", netif->name[0], netif->name[1], netif->num));
@@ -1701,3 +1723,4 @@ napt_debug_print()
   }
 }
 #endif /* NAPT_DEBUG */
+
