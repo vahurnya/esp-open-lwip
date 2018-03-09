@@ -7,6 +7,16 @@
 struct route_entry ip_rt_table[MAX_ROUTES];
 int ip_route_max = 0;
 
+uint32_t ICACHE_FLASH_ATTR
+mask2clidr (ip_addr_t *mask)
+{
+uint32_t clidr;
+
+  uint32_t m = mask->addr;
+  for (clidr = 0; m; m <<= 1,clidr++);
+  return clidr;
+}
+
 bool ICACHE_FLASH_ATTR
 ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
 {
@@ -19,8 +29,8 @@ ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
 
   add_pos = ip_route_max;
   for (i = 0; i<ip_route_max; i++) {
-    // If it finds a super-net already in the table, add it below this entry
-    if (ip_addr_netcmp(&ip, &ip_rt_table[i].ip, &ip_rt_table[i].mask)) {
+    // sort entries by mask length
+    if (mask2clidr(&mask) > mask2clidr(&ip_rt_table[i].mask)) {
       add_pos = i;
       for (j = ip_route_max-1; j >= i; j--) {
 	ip_rt_table[j+1] = ip_rt_table[j];    

@@ -141,22 +141,16 @@ ip_route(ip_addr_t *dest)
 #ifdef IP_ROUTING_TAB
   int i;
 //os_printf_plus("ip_route route to %d.%d.%d.%d\r\n",
-//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); ;  
+//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); 
   /* search route */
   struct route_entry *found_route = ip_find_route(*dest);
   if (found_route) {
-    if (ip_addr_cmp(dest, &found_route->gw)) {
-      LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: routing loop for %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
-        ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
-      IP_STATS_INC(ip.rterr);
-      snmp_inc_ipoutnoroutes();
-      return NULL;
-    }
-
     ip_addr_copy(current_ip_new_dest, found_route->gw);
 
     /* now go on and find the netif on which to forward the packet */
     dest = &current_ip_new_dest;
+//os_printf_plus("redirected to %d.%d.%d.%d\r\n",
+//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); 
   }
 #endif /* IP_ROUTING_TAB */
 
@@ -166,6 +160,7 @@ ip_route(ip_addr_t *dest)
     if (netif_is_up(netif)) {
       if (ip_addr_netcmp(dest, &(netif->ip_addr), &(netif->netmask))) {
         /* return netif on which to forward IP packet */
+//os_printf_plus("send through netif %c%c%d\r\n", netif->name[0], netif->name[1], netif->num);
         return netif;
       }
     }
@@ -176,6 +171,7 @@ ip_route(ip_addr_t *dest)
     /* This is a hack! Always sends is through the STA interface as default */
     if (netif_is_up(netif)) {
       if (!ip_addr_isbroadcast(dest, netif) && netif == (struct netif *)eagle_lwip_getif(0)) {
+//os_printf_plus("send through netif %c%c%d\r\n", netif->name[0], netif->name[1], netif->num);
         return netif;
       }
     }
@@ -186,9 +182,11 @@ ip_route(ip_addr_t *dest)
       ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
     IP_STATS_INC(ip.rterr);
     snmp_inc_ipoutnoroutes();
+//os_printf_plus("no netif found\r\n");
     return NULL;
   }
   /* no matching netif found, use default netif */
+//os_printf_plus("send through netif %c%c%d\r\n", netif_default->name[0], netif_default->name[1], netif_default->num);
   return netif_default;
 }
 
