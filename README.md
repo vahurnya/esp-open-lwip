@@ -20,15 +20,29 @@ This stack also supports SLIP (Serial Line IP) interfaces via UARTs. To get this
 
 IPv4 now has a static routing table. In "ip_route.h" there are these new functions:
 ```
-/* Add a static route as top entry */
+struct route_entry {
+    ip_addr_t ip;
+    ip_addr_t mask;
+    ip_addr_t gw;
+};
+
+/* Add a static route, true on success */
 bool ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw);
 
-/* Remove a static route entry */
+/* Remove a static route, true on success */
 bool ip_rm_route(ip_addr_t ip, ip_addr_t mask);
+
+/* Finds a route entry for an address, NULL if none */
+struct route_entry *ip_find_route(ip_addr_t ip);
 
 /* Delete all static routes */
 void ip_delete_routes(void);
 
-/* Returns the n_th entry of the routing table */
+/* Returns the n_th entry of the routing table, true on success */
 bool ip_get_route(uint32_t no, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw);
 ```
+
+### Additional Netifs
+Added two additional preliminary netif implementations:
+- The Ethernet ENC28J60 driver from https://github.com/Informatic/espenc . This should work with an ENC28J60 connected via SPI. To get this running,you will need at least this SPI driver: https://github.com/MetalPhreak/ESP8266_SPI_Driver . This is not yet tested.
+- A TUNIF dummy device. This skeleton driver needs at least some additional load/unload functions to be useful for anything. It is intended as starting point for a tunnel device, e.g. for some kind of VPN tunnel.

@@ -118,59 +118,6 @@ static u16_t ip_id;
 #ifdef IP_ROUTING_TAB
 /** Destination IP address of current_header after routing */
 ip_addr_t current_ip_new_dest;
-
-struct route_entry ip_rt_table[MAX_ROUTES];
-int ip_route_max = 0;
-
-bool ICACHE_FLASH_ATTR
-ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
-{
-  if (ip_route_max == MAX_ROUTES)
-    return false;
-
-  ip_addr_copy(ip_rt_table[ip_route_max].ip, ip);
-  ip_addr_copy(ip_rt_table[ip_route_max].mask, mask);
-  ip_addr_copy(ip_rt_table[ip_route_max].gw, gw);
-  ip_route_max++;
-  return true;
-}
-
-bool ICACHE_FLASH_ATTR
-ip_rm_route(ip_addr_t ip, ip_addr_t mask)
-{
-  int i;
-
-  for (i = 0; i<ip_route_max; i++) {
-    if (ip_addr_cmp(&ip, &ip_rt_table[i].ip) && ip_addr_cmp(&mask, &ip_rt_table[i].mask)) {
-      for (i = i+1; i<ip_route_max; i++) {
-	ip_rt_table[i-1] = ip_rt_table[i];    
-      }
-      ip_route_max--;
-      return true;
-    }
-  }
-  return false;
-}
-
-void ICACHE_FLASH_ATTR
-ip_delete_routes(void)
-{
-  ip_route_max = 0;
-}
-
-bool ICACHE_FLASH_ATTR
-ip_get_route(uint32_t no, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw)
-{
-  if (no >= ip_route_max)
-    return false;
-  /* searched backwards */
-  no = ip_route_max-no-1;
-  ip_addr_copy(*ip, ip_rt_table[no].ip);
-  ip_addr_copy(*mask, ip_rt_table[no].mask);
-  ip_addr_copy(*gw, ip_rt_table[no].gw);
-  return true;
-}
-
 #endif /* IP_ROUTING_TAB */
 
 /**
@@ -191,6 +138,28 @@ ip_route(ip_addr_t *dest)
   ip_addr_copy(current_ip_new_dest, *dest);
 #endif
 
+#ifdef IP_ROUTING_TAB
+  int i;
+//os_printf_plus("ip_route route to %d.%d.%d.%d\r\n",
+//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); ;  
+  /* search route */
+  struct route_entry *found_route = ip_find_route(*dest);
+  if (found_route) {
+    if (ip_addr_cmp(dest, &found_route->gw)) {
+      LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: routing loop for %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
+        ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
+      IP_STATS_INC(ip.rterr);
+      snmp_inc_ipoutnoroutes();
+      return NULL;
+    }
+
+    ip_addr_copy(current_ip_new_dest, found_route->gw);
+
+    /* now go on and find the netif on which to forward the packet */
+    dest = &current_ip_new_dest;
+  }
+#endif /* IP_ROUTING_TAB */
+
   /* iterate through netifs */
   for(netif = netif_list; netif != NULL; netif = netif->next) {
     /* network mask matches? */
@@ -202,34 +171,9 @@ ip_route(ip_addr_t *dest)
     }
   }
 
-#ifdef IP_ROUTING_TAB
-  int i;
-//os_printf_plus("ip_route route to %d.%d.%d.%d\r\n",
-//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); ;  
-  /* search backwards, latest added route first */
-  for (i = ip_route_max-1; i>=0; i--) {
-    if (ip_addr_netcmp(dest, &ip_rt_table[i].ip, &ip_rt_table[i].mask)) {
-      if (ip_addr_cmp(dest, &ip_rt_table[i].gw)) {
-        LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: routing loop for %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
-          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)));
-        IP_STATS_INC(ip.rterr);
-        snmp_inc_ipoutnoroutes();
-        return NULL;
-      }
-
-      ip_addr_copy(current_ip_new_dest, ip_rt_table[i].gw);
-//os_printf_plus("ip_route route through %d.%d.%d.%d\r\n",
-//          ip4_addr1_16(&current_ip_new_dest), ip4_addr2_16(&current_ip_new_dest), ip4_addr3_16(&current_ip_new_dest), ip4_addr4_16(&current_ip_new_dest)); ;  
-
-      /* now go and find the netif on which to forward the packet */
-      return ip_route(&current_ip_new_dest);
-    }
-  }
-#endif /* IP_ROUTING_TAB */
-
   /* iterate through netifs */
   for(netif = netif_list; netif != NULL; netif = netif->next) {
-    /* network mask matches? */
+    /* This is a hack! Always sends is through the STA interface as default */
     if (netif_is_up(netif)) {
       if (!ip_addr_isbroadcast(dest, netif) && netif == (struct netif *)eagle_lwip_getif(0)) {
         return netif;
@@ -265,14 +209,14 @@ ip_router(ip_addr_t *dest, ip_addr_t *source){
   	for(netif = netif_list; netif != NULL; netif = netif->next) {
 	    /* network mask matches? */
 		
-		if (netif_is_up(netif)) {
+	    if (netif_is_up(netif)) {
 	      if (ip_addr_netcmp(dest, &(netif->ip_addr), &(netif->netmask))) {
 	        /* return netif on which to forward IP packet */
 	        return netif;
 	      }
 	    }
 
-		if (netif_is_up(netif)) {
+	    if (netif_is_up(netif)) {
 	      if (ip_addr_netcmp(source, &(netif->ip_addr), &(netif->netmask))) {
 	        /* return netif on which to forward IP packet */
 	        return netif;
