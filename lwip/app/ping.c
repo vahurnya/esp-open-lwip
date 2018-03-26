@@ -190,6 +190,8 @@ ping_recv(void *arg, struct raw_pcb *pcb, struct pbuf *p, ip_addr_t *addr)
 //    }
   }
 
+  pbuf_header( p, PBUF_IP_HLEN);
+
   return 0; /* don't eat the packet */
 }
 

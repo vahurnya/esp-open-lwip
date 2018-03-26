@@ -77,6 +77,7 @@ struct netif *netif_default;
 
 #if LWIP_HAVE_LOOPIF
 static struct netif loop_netif;
+netif_status_callback_fn netif_loop_action;
 
 /**
  * Initialize a lwip network interface structure for a loopback interface
@@ -96,6 +97,7 @@ netif_loopif_init(struct netif *netif)
   netif->name[0] = 'l';
   netif->name[1] = 'o';
   netif->output = netif_loop_output;
+
   return ERR_OK;
 }
 #endif /* LWIP_HAVE_LOOPIF */
@@ -108,6 +110,8 @@ netif_init(void)
   IP4_ADDR(&loop_gw, 127,0,0,1);
   IP4_ADDR(&loop_ipaddr, 127,0,0,1);
   IP4_ADDR(&loop_netmask, 255,0,0,0);
+
+  netif_loop_action = NULL;
 
 #if NO_SYS
   netif_add(&loop_netif, &loop_ipaddr, &loop_netmask, &loop_gw, NULL, netif_loopif_init, ip_input);
@@ -671,6 +675,10 @@ netif_loop_output(struct netif *netif, struct pbuf *p,
 #if LWIP_NETIF_LOOPBACK_MULTITHREADING
   /* For multithreading environment, schedule a call to netif_poll */
   tcpip_callback((tcpip_callback_fn)netif_poll, netif);
+#else
+  /* user defined callback */
+  if (netif_loop_action != NULL)
+    netif_loop_action(netif);
 #endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
 
   return ERR_OK;

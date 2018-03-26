@@ -120,6 +120,50 @@ static u16_t ip_id;
 ip_addr_t current_ip_new_dest;
 #endif /* IP_ROUTING_TAB */
 
+/*
+void
+ip_print(struct pbuf *p)
+{
+  struct ip_hdr *iphdr = (struct ip_hdr *)p->payload;
+  u8_t *payload;
+
+  payload = (u8_t *)iphdr + IP_HLEN;
+
+  os_printf("IP header:\n");
+  os_printf("+-------------------------------+\n");
+  os_printf("|%2"S16_F" |%2"S16_F" |  0x%02"X16_F" |     %5"U16_F"     | (v, hl, tos, len)\n",
+                    IPH_V(iphdr),
+                    IPH_HL(iphdr),
+                    IPH_TOS(iphdr),
+                    ntohs(IPH_LEN(iphdr)));
+  os_printf("+-------------------------------+\n");
+  os_printf("|    %5"U16_F"      |%"U16_F"%"U16_F"%"U16_F"|    %4"U16_F"   | (id, flags, offset)\n",
+                    ntohs(IPH_ID(iphdr)),
+                    ntohs(IPH_OFFSET(iphdr)) >> 15 & 1,
+                    ntohs(IPH_OFFSET(iphdr)) >> 14 & 1,
+                    ntohs(IPH_OFFSET(iphdr)) >> 13 & 1,
+                    ntohs(IPH_OFFSET(iphdr)) & IP_OFFMASK);
+  os_printf("+-------------------------------+\n");
+  os_printf("|  %3"U16_F"  |  %3"U16_F"  |    0x%04"X16_F"     | (ttl, proto, chksum)\n",
+                    IPH_TTL(iphdr),
+                    IPH_PROTO(iphdr),
+                    ntohs(IPH_CHKSUM(iphdr)));
+  os_printf("+-------------------------------+\n");
+  os_printf("|  %3"U16_F"  |  %3"U16_F"  |  %3"U16_F"  |  %3"U16_F"  | (src)\n",
+                    ip4_addr1_16(&iphdr->src),
+                    ip4_addr2_16(&iphdr->src),
+                    ip4_addr3_16(&iphdr->src),
+                    ip4_addr4_16(&iphdr->src));
+  os_printf("+-------------------------------+\n");
+  os_printf("|  %3"U16_F"  |  %3"U16_F"  |  %3"U16_F"  |  %3"U16_F"  | (dest)\n",
+                    ip4_addr1_16(&iphdr->dest),
+                    ip4_addr2_16(&iphdr->dest),
+                    ip4_addr3_16(&iphdr->dest),
+                    ip4_addr4_16(&iphdr->dest));
+  os_printf("+-------------------------------+\n");
+}
+*/
+
 /**
  * Finds the appropriate network interface for a given IP address. It
  * searches the list of network interfaces linearly. A match is found
@@ -1254,7 +1298,6 @@ ip_input(struct pbuf *p, struct netif *inp)
   if (raw_input(p, inp) == 0)
 #endif /* LWIP_RAW */
   {
-
     switch (IPH_PROTO(iphdr)) {
 #if LWIP_UDP
     case IP_PROTO_UDP:
@@ -1479,7 +1522,8 @@ err_t ip_output_if_opt(struct pbuf *p, ip_addr_t *src, ip_addr_t *dest,
   LWIP_DEBUGF(IP_DEBUG, ("ip_output_if: %c%c%"U16_F"\n", netif->name[0], netif->name[1], netif->num));
   ip_debug_print(p);
 
-#if ENABLE_LOOPBACK
+#if 0 && ENABLE_LOOPBACK
+  /* doesn't work for external wifi interfaces */
   if (ip_addr_cmp(dest, &netif->ip_addr)) {
     /* Packet to self, enqueue it for loopback */
     LWIP_DEBUGF(IP_DEBUG, ("netif_loop_output()"));

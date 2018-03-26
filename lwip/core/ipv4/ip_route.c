@@ -22,6 +22,9 @@ ip_add_route(ip_addr_t ip, ip_addr_t mask, ip_addr_t gw)
 {
   int add_pos, i, j;
 
+  // Remove it if already existing
+  ip_rm_route(ip, mask);
+
   if (ip_route_max >= MAX_ROUTES)
     return false;
 
