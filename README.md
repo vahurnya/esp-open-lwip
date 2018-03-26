@@ -43,6 +43,8 @@ bool ip_get_route(uint32_t no, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw);
 ```
 
 ### Additional Netifs
+- With LWIP_HAVE_LOOPIF 1 in lwipopts.h the stack configures a loopback interface at 127.0.0.1. To get it working either netif_poll_all() has to be called often in the main loop or the new global callback variable netif_loop_action has to be defined with a void* callback_fn(struct netif *netif) that schedules a netif_poll(netif) in the main task.
+
 Added two additional preliminary netif implementations:
 - The Ethernet ENC28J60 driver from https://github.com/Informatic/espenc . This should work with an ENC28J60 connected via SPI. To get this running,you will need at least this SPI driver: https://github.com/MetalPhreak/ESP8266_SPI_Driver . This is not yet tested.
 - A TUNIF dummy device. This skeleton driver needs at least some additional load/unload functions to be useful for anything. It is intended as starting point for a tunnel device, e.g. for some kind of VPN tunnel.
