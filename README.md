@@ -43,7 +43,7 @@ bool ip_get_route(uint32_t no, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw);
 ```
 
 ### Additional Netifs
-- With LWIP_HAVE_LOOPIF 1 in lwipopts.h the stack configures a loopback interface at 127.0.0.1. To get it working either netif_poll_all() has to be called often in the main loop or the new global callback variable netif_loop_action has to be defined with a void* callback_fn(struct netif *netif) that schedules a netif_poll(netif) in the main task.
+- With LWIP_HAVE_LOOPIF 1 in lwipopts.h the lwip stack provides a loopback ("lo0") interface at 127.0.0.1. To get it working call void loopback_netif_init(netif_status_callback_fn cb) from netif.h. Either the callback provided in the init function is implemented to schedule a netif_poll(netif) in the main task or (with NULL callback) netif_poll_all() has to be called peroidically in the main loop. 
 
 Added two additional preliminary netif implementations:
 - The Ethernet ENC28J60 driver from https://github.com/Informatic/espenc . This should work with an ENC28J60 connected via SPI. To get this running,you will need at least this SPI driver: https://github.com/MetalPhreak/ESP8266_SPI_Driver . This is not yet tested.
