@@ -616,7 +616,7 @@ sntp_asctime(struct tm *tim_p)
 uint32 sntp_get_current_timestamp()
 {
 	if(realtime_stamp == 0){
-		os_printf("please start sntp first !\n");
+		//os_printf("please start sntp first !\n");
 		return 0;
 	} else {
 		return realtime_stamp;
@@ -682,7 +682,7 @@ sntp_process(u32_t *receive_timestamp)
   os_timer_disarm(&sntp_timer);
   os_timer_setfn(&sntp_timer, (os_timer_func_t *)sntp_time_inc, NULL);
   os_timer_arm(&sntp_timer, 1000, 1);
-  os_printf("%s\n",sntp_asctime(sntp_localtime (&t)));
+//  os_printf("%s\n",sntp_asctime(sntp_localtime (&t)));
 //  os_printf("%s\n",ctime(&t));
 //  LWIP_DEBUGF(SNTP_DEBUG_TRACE, ("sntp_process: %s", ctime(&t)));
 #endif /* SNTP_CALC_TIME_US */
