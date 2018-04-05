@@ -1,22 +1,22 @@
 #include <lwip/ip_addr.h>
+#include <lwip/dhcp.h>
 #include "netif/espenc.h"
 #include "netif/driver/spi.h"
 #include "gpio.h"
 #include "mem.h"
 
 struct netif enc_netif;
-ip_addr_t ipaddr;
 
 static uint8_t Enc28j60Bank;
 static uint16_t NextPacketPtr;
 
-void chipEnable() {
+void ICACHE_FLASH_ATTR chipEnable() {
     // Force CS pin low (FIXME)
     PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15);
     GPIO_OUTPUT_SET(ESP_CS, 0);
 }
 
-void chipDisable() {
+void ICACHE_FLASH_ATTR chipDisable() {
     // Return to default CS function
     PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, 2); //GPIO15 is HSPI CS pin (Chip Select / Slave Select)
 }
@@ -110,7 +110,7 @@ static void writeBuf(uint16_t len, const uint8_t* data) {
     chipDisable();
 }
 
-uint8_t enc28j60_int_disable() {
+uint8_t ICACHE_FLASH_ATTR enc28j60_int_disable() {
     uint8_t interrupts = 0;
     SetBank(EIE);
     interrupts = readRegByte(EIE);
@@ -118,12 +118,12 @@ uint8_t enc28j60_int_disable() {
     return interrupts;
 }
 
-void enc28j60_int_enable(uint8_t interrupts) {
+void ICACHE_FLASH_ATTR enc28j60_int_enable(uint8_t interrupts) {
     SetBank(EIE);
     writeOp(ENC28J60_BIT_FIELD_SET, EIE, interrupts);
 }
 
-err_t enc28j60_link_output(struct netif *netif, struct pbuf *p) {
+err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p) {
     uint8_t retry = 0;
     uint16_t len = p->tot_len;
 
@@ -265,7 +265,7 @@ void interrupt_handler(void *arg) {
 }
 
 // http://lwip.wikia.com/wiki/Writing_a_device_driver
-err_t enc28j60_init(struct netif *netif) {
+err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
     ETS_GPIO_INTR_ATTACH(interrupt_handler, &interrupt_reg);
     ETS_GPIO_INTR_ENABLE();
 
@@ -284,12 +284,12 @@ err_t enc28j60_init(struct netif *netif) {
     netif->name[1] = 'n';
     netif->mtu = 1500;
     netif->hwaddr_len = 6;
-    netif->hwaddr[0] = 0x00;
-    netif->hwaddr[1] = 0x11;
-    netif->hwaddr[2] = 0x22;
-    netif->hwaddr[3] = 0x33;
-    netif->hwaddr[4] = 0x44;
-    netif->hwaddr[5] = 0x55;
+    //netif->hwaddr[0] = 0x00;
+    //netif->hwaddr[1] = 0x11;
+    //netif->hwaddr[2] = 0x22;
+    //netif->hwaddr[3] = 0x33;
+    //netif->hwaddr[4] = 0x44;
+    //netif->hwaddr[5] = 0x55;
 
     netif->output = etharp_output;
     netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP;
@@ -297,8 +297,8 @@ err_t enc28j60_init(struct netif *netif) {
     log("initializing hardware");
     spi_init(HSPI);
     spi_mode(HSPI, 0, 0);
-    writeOp(ENC28J60_SOFT_RESET, 0, ENC28J60_SOFT_RESET);
 
+    writeOp(ENC28J60_SOFT_RESET, 0, ENC28J60_SOFT_RESET);
     uint8_t estat;
     while(!(estat = readOp(ENC28J60_READ_CTRL_REG, ESTAT)) & ESTAT_CLKRDY) {
         log("estat: %02x", estat);
@@ -348,25 +348,24 @@ err_t enc28j60_init(struct netif *netif) {
     return ERR_OK;
 }
 
-void espenc_init() {
+struct netif* ICACHE_FLASH_ATTR espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp) {
+    ip_addr_t nulladdr;
+    struct netif* new_netif;
 
-    IP4_ADDR(&ipaddr, 0, 0, 0, 0);
+    IP4_ADDR(&nulladdr, 0, 0, 0, 0);
+    
+    os_memcpy (enc_netif.hwaddr, mac_addr, 6);
 
-    struct netif* new_netif = netif_add(&enc_netif, &ipaddr, &ipaddr, &ipaddr, NULL, enc28j60_init,
-                                    ethernet_input);
-    log("new_netif: %d", new_netif);
-
-    if(new_netif == NULL) {
-        // failed?
-        return;
+    if (dhcp) {
+	new_netif = netif_add(&enc_netif, &nulladdr, &nulladdr, &nulladdr, NULL, enc28j60_init, ethernet_input);
+	if (new_netif) {
+	    dhcp_start(new_netif);
+	}
+    } else {
+	new_netif = netif_add(&enc_netif, ip, mask, gw, NULL, enc28j60_init, ethernet_input);
+	if (new_netif) {
+	    netif_set_up(new_netif);
+	}
     }
-
-    struct netif* n = netif_list;
-    while(n) {
-        log("network: %d %d; up: %d", n->name[0], n->name[1], netif_is_up(n));
-        n = n->next;
-    }
-
-    log("etharp: %d", (new_netif->flags & NETIF_FLAG_ETHARP));
-    log("dhcp_start(): %d", dhcp_start(new_netif));
+    return new_netif;
 }

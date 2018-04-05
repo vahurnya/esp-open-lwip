@@ -113,13 +113,11 @@ loopback_netif_init(netif_status_callback_fn cb)
 
   netif_loop_action = cb;
 
-  netifnum = 0;
 #if NO_SYS
   netif_add(&loop_netif, &loop_ipaddr, &loop_netmask, &loop_gw, NULL, netif_loopif_init, ip_input);
 #else  /* NO_SYS */
   netif_add(&loop_netif, &loop_ipaddr, &loop_netmask, &loop_gw, NULL, netif_loopif_init, tcpip_input);
 #endif /* NO_SYS */
-  netifnum = 0;
 
   netif_set_up(&loop_netif);
 }
@@ -184,7 +182,7 @@ netif_add(struct netif *netif, ip_addr_t *ipaddr, ip_addr_t *netmask,
 
   /* remember netif specific state information data */
   netif->state = state;
-  netif->num = netifnum++;
+  //netif->num = netifnum++;
   netif->input = input;
 #if LWIP_NETIF_HWADDRHINT
   netif->addr_hint = NULL;
@@ -203,6 +201,15 @@ netif_add(struct netif *netif, ip_addr_t *ipaddr, ip_addr_t *netmask,
   if (init(netif) != ERR_OK) {
     return NULL;
   }
+
+  netifnum = 0;
+  struct netif *nif;
+  for (nif = netif_list; nif != NULL; nif = nif->next) {
+    if (nif->name[0] == netif->name[0] && nif->name[1] == netif->name[1]) {
+      netifnum++;
+    }
+  }
+  netif->num = netifnum;
 
   /* add this netif to the list */
   netif->next = netif_list;
