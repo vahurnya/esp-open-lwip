@@ -15,7 +15,7 @@ Fixes some issues I had with checksums and timers and can be used for full WiFi 
 This stack also supports SLIP (Serial Line IP) interfaces via UARTs. To get this up and running, you will need an appropriate UART-driver and some initialization in the main program. You can find a demo at: https://github.com/martin-ger/esp_slip_router
 
 ## ENC28J60 Ethernet
-Starting from the Ethernet ENC28J60 driver from https://github.com/Informatic/espenc . This works with an ENC28J60 connected via SPI. To get this running,you will need at least this SPI driver: https://github.com/MetalPhreak/ESP8266_SPI_Driver and the following wireing:
+Starting from the Ethernet ENC28J60 driver from https://github.com/Informatic/espenc . This works with an ENC28J60 connected via SPI. To get this running, you will need at least this SPI driver: https://github.com/MetalPhreak/ESP8266_SPI_Driver and the following wiring:
 ```
 ESP8266      ENC28J60
 
