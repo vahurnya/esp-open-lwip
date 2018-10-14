@@ -5,8 +5,8 @@ err_t enc28j60_link_output(struct netif *netif, struct pbuf *p);
 err_t enc28j60_init(struct netif *netif);
 struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp);
 
-//#define log(s, ...)
-#define log(s, ...) os_printf ("[%s:%s:%d] " s "\n", __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define log(s, ...)
+//#define log(s, ...) os_printf ("[%s:%s:%d] " s "\n", __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define ESP_CS 15
 #define ESP_INT 5
@@ -236,7 +236,7 @@ struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_
 
 #define RXSTART_INIT        0x0000  // start of RX buffer, (must be zero, Rev. B4 Errata point 5)
 #define RXSTOP_INIT         0x0BFF  // end of RX buffer, room for 2 packets
- 
+
 #define TXSTART_INIT        0x0C00  // start of TX buffer, room for 1 packet
 #define TXSTOP_INIT         0x11FF  // end of TX buffer
 
