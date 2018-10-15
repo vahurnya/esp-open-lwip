@@ -1,7 +1,7 @@
 /**
  * @file
  * This is the IPv4 layer implementation for incoming and outgoing IP traffic.
- * 
+ *
  * @see ip_frag.c
  *
  */
@@ -185,7 +185,7 @@ ip_route(ip_addr_t *dest)
 #ifdef IP_ROUTING_TAB
   int i;
 //os_printf_plus("ip_route route to %d.%d.%d.%d\r\n",
-//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); 
+//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest));
   /* search route */
   struct route_entry *found_route = ip_find_route(*dest);
   if (found_route) {
@@ -194,7 +194,7 @@ ip_route(ip_addr_t *dest)
     /* now go on and find the netif on which to forward the packet */
     dest = &current_ip_new_dest;
 //os_printf_plus("redirected to %d.%d.%d.%d\r\n",
-//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest)); 
+//          ip4_addr1_16(dest), ip4_addr2_16(dest), ip4_addr3_16(dest), ip4_addr4_16(dest));
   }
 #endif /* IP_ROUTING_TAB */
 
@@ -215,7 +215,7 @@ ip_route(ip_addr_t *dest)
     /* This is a hack! Always sends is through the STA interface as default */
     if (netif_is_up(netif)) {
       if (!ip_addr_isbroadcast(dest, netif) && netif == (struct netif *)eagle_lwip_getif(0)) {
-//os_printf_plus("send through netif %c%c%d\r\n", netif->name[0], netif->name[1], netif->num);
+//os_printf_plus("HACK send through netif %c%c%d\r\n", netif->name[0], netif->name[1], netif->num);
         return netif;
       }
     }
@@ -250,7 +250,7 @@ ip_router(ip_addr_t *dest, ip_addr_t *source){
 	/* iterate through netifs */
   	for(netif = netif_list; netif != NULL; netif = netif->next) {
 	    /* network mask matches? */
-		
+
 	    if (netif_is_up(netif)) {
 	      if (ip_addr_netcmp(dest, &(netif->ip_addr), &(netif->netmask))) {
 	        /* return netif on which to forward IP packet */
@@ -539,7 +539,7 @@ ip_napt_find(u8_t proto, u32_t addr, u16_t port, u16_t mport, u8_t dest)
       LWIP_DEBUGF(NAPT_DEBUG, ("found\n"));
       return t;
     }
-    if (dest == 1 && t->proto == proto && t->dest == addr && t->dport == port 
+    if (dest == 1 && t->proto == proto && t->dest == addr && t->dport == port
         && t->mport == mport) {
       t->last = now;
       LWIP_DEBUGF(NAPT_DEBUG, ("found\n"));
@@ -755,7 +755,7 @@ ip_napt_recv(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
       ip4_addr3_16(&iphdr->src), ip4_addr4_16(&iphdr->src),
       ip4_addr1_16(&iphdr->dest), ip4_addr2_16(&iphdr->dest),
       ip4_addr3_16(&iphdr->dest), ip4_addr4_16(&iphdr->dest)));
-	  
+
       LWIP_DEBUGF(NAPT_DEBUG, ("sport %u, dport: %u\n",
                         PP_HTONS(tcphdr->src),
                         PP_HTONS(tcphdr->dest)));
@@ -964,7 +964,7 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   }
   /* Do not forward packets onto the same network interface on which
    * they arrived. */
-  if (netif == inp 
+  if (netif == inp
 #ifdef IP_ROUTING_TAB
       /* ... except if it had been routed to another gw */
       && ip_addr_cmp(&current_ip_new_dest, &current_iphdr_dest)
@@ -1006,7 +1006,7 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   }
 
 /*  os_printf("Old: %4x ", PP_NTOHS(IPH_CHKSUM(iphdr)));
- 
+
   IPH_CHKSUM_SET(iphdr, 0);
   IPH_CHKSUM_SET(iphdr, inet_chksum(iphdr, IP_HLEN));
   os_printf("Now: %4x\r\n", PP_NTOHS(IPH_CHKSUM(iphdr)));
@@ -1036,7 +1036,7 @@ return_noroute:
  * forwarded (using ip_forward). The IP checksum is always checked.
  *
  * Finally, the packet is sent to the upper layer protocol input function.
- * 
+ *
  * @param p the received IP packet (p->payload points to IP header)
  * @param inp the netif on which this packet was received
  * @return ERR_OK if the packet was processed (could return ERR_* if it wasn't
