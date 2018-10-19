@@ -392,6 +392,21 @@ slipif_poll(struct netif *netif)
   }
 }
 
+/*
+print_rxqueue(struct netif *netif){
+  struct slipif_priv *priv;
+  priv = (struct slipif_priv *)netif->state;
+  struct pbuf *q = priv->rxpackets;
+  if (q == NULL) {
+    os_printf("empty\r\n", q);
+  } else {
+    while(q != NULL) {
+      os_printf("element (%x)\r\n", q);
+      q = q->next;
+    }
+  }
+}
+*/
 #if SLIP_RX_FROM_ISR
 /**
  * Feeds the IP layer with incoming packets that were receive
@@ -408,22 +423,26 @@ slipif_process_rxqueue(struct netif *netif)
   LWIP_ASSERT("netif->state != NULL", (netif->state != NULL));
 
   priv = (struct slipif_priv *)netif->state;
-
+//print_rxqueue(netif);
   SYS_ARCH_PROTECT(old_level);
   while (priv->rxpackets != NULL) {
     struct pbuf *p = priv->rxpackets;
 #if SLIP_RX_QUEUE
     /* dequeue packet */
-    struct pbuf *q = p;
+/*    struct pbuf *q = p;
     while ((q->len != q->tot_len) && (q->next != NULL)) {
       q = q->next;
     }
     priv->rxpackets = q->next;
     q->next = NULL;
+*/
+    priv->rxpackets = p->next;
+    p->next = NULL;
 #else /* SLIP_RX_QUEUE */
     priv->rxpackets = NULL;
 #endif /* SLIP_RX_QUEUE */
     SYS_ARCH_UNPROTECT(old_level);
+//os_printf("process (%x)\r\n", p);
     if (netif->input(p, netif) != ERR_OK) {
       pbuf_free(p);
     }
@@ -448,8 +467,10 @@ slipif_rxbyte_enqueue(struct netif *netif, u8_t data)
     SYS_ARCH_PROTECT(old_level);
     if (priv->rxpackets != NULL) {
 #if SLIP_RX_QUEUE
+//os_printf("enqueue (%x)\r\n", p);
       /* queue multiple pbufs */
-      struct pbuf *q = p;
+//      struct pbuf *q = p;
+      struct pbuf *q = priv->rxpackets;
       while(q->next != NULL) {
         q = q->next;
       }
@@ -460,8 +481,10 @@ slipif_rxbyte_enqueue(struct netif *netif, u8_t data)
     }
     {
 #endif /* SLIP_RX_QUEUE */
+//os_printf("first (%x)\r\n", p);
       priv->rxpackets = p;
     }
+//print_rxqueue(netif);
     SYS_ARCH_UNPROTECT(old_level);
   }
 }
@@ -508,3 +531,4 @@ slipif_received_bytes(struct netif *netif, u8_t *data, u8_t len)
 #endif /* SLIP_RX_FROM_ISR */
 
 #endif /* LWIP_HAVE_SLIPIF */
+

@@ -75,8 +75,11 @@
 struct netif *netif_list;
 struct netif *netif_default;
 
+static u8_t netifnum = 0;
+
 #if LWIP_HAVE_LOOPIF
 static struct netif loop_netif;
+netif_status_callback_fn netif_loop_action;
 
 /**
  * Initialize a lwip network interface structure for a loopback interface
@@ -96,26 +99,36 @@ netif_loopif_init(struct netif *netif)
   netif->name[0] = 'l';
   netif->name[1] = 'o';
   netif->output = netif_loop_output;
+
   return ERR_OK;
 }
-#endif /* LWIP_HAVE_LOOPIF */
 
 void
-netif_init(void)
+loopback_netif_init(netif_status_callback_fn cb)
 {
-#if LWIP_HAVE_LOOPIF
   ip_addr_t loop_ipaddr, loop_netmask, loop_gw;
   IP4_ADDR(&loop_gw, 127,0,0,1);
   IP4_ADDR(&loop_ipaddr, 127,0,0,1);
   IP4_ADDR(&loop_netmask, 255,0,0,0);
+
+  netif_loop_action = cb;
 
 #if NO_SYS
   netif_add(&loop_netif, &loop_ipaddr, &loop_netmask, &loop_gw, NULL, netif_loopif_init, ip_input);
 #else  /* NO_SYS */
   netif_add(&loop_netif, &loop_ipaddr, &loop_netmask, &loop_gw, NULL, netif_loopif_init, tcpip_input);
 #endif /* NO_SYS */
-  netif_set_up(&loop_netif);
 
+  netif_set_up(&loop_netif);
+}
+#endif /* LWIP_HAVE_LOOPIF */
+
+void
+netif_init(void)
+{
+
+#ifdef LWIP_HAVE_LOOPIF
+  //loopback_netif_init(NULL);
 #endif /* LWIP_HAVE_LOOPIF */
 }
 
@@ -137,8 +150,6 @@ struct netif *
 netif_add(struct netif *netif, ip_addr_t *ipaddr, ip_addr_t *netmask,
   ip_addr_t *gw, void *state, netif_init_fn init, netif_input_fn input)
 {
-  static u8_t netifnum = 0;
-
   LWIP_ASSERT("No init function given", init != NULL);
 
   /* reset new interface configuration state */
@@ -171,7 +182,7 @@ netif_add(struct netif *netif, ip_addr_t *ipaddr, ip_addr_t *netmask,
 
   /* remember netif specific state information data */
   netif->state = state;
-  netif->num = netifnum++;
+  //netif->num = netifnum++;
   netif->input = input;
 #if LWIP_NETIF_HWADDRHINT
   netif->addr_hint = NULL;
@@ -190,6 +201,15 @@ netif_add(struct netif *netif, ip_addr_t *ipaddr, ip_addr_t *netmask,
   if (init(netif) != ERR_OK) {
     return NULL;
   }
+
+  netifnum = 0;
+  struct netif *nif;
+  for (nif = netif_list; nif != NULL; nif = nif->next) {
+    if (nif->name[0] == netif->name[0] && nif->name[1] == netif->name[1]) {
+      netifnum++;
+    }
+  }
+  netif->num = netifnum;
 
   /* add this netif to the list */
   netif->next = netif_list;
@@ -671,6 +691,10 @@ netif_loop_output(struct netif *netif, struct pbuf *p,
 #if LWIP_NETIF_LOOPBACK_MULTITHREADING
   /* For multithreading environment, schedule a call to netif_poll */
   tcpip_callback((tcpip_callback_fn)netif_poll, netif);
+#else
+  /* user defined callback */
+  if (netif_loop_action != NULL)
+    netif_loop_action(netif);
 #endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
 
   return ERR_OK;

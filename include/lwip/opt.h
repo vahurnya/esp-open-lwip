@@ -504,6 +504,10 @@
 #define IP_FORWARD                      1
 #endif
 
+#ifndef IP_ROUTING_TAB
+#define IP_ROUTING_TAB                  1
+#endif
+
 #ifndef IP_NAPT
 #define IP_NAPT                         1
 #endif

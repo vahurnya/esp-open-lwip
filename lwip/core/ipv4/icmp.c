@@ -88,7 +88,6 @@ icmp_input(struct pbuf *p, struct netif *inp)
   ICMP_STATS_INC(icmp.recv);
   snmp_inc_icmpinmsgs();
 
-
   iphdr = (struct ip_hdr *)p->payload;
   hlen = IPH_HL(iphdr) * 4;
   if (pbuf_header(p, -hlen) || (p->tot_len < sizeof(u16_t)*2)) {
@@ -294,44 +293,44 @@ icmp_send_response(struct pbuf *p, u8_t type, u8_t code)
   ip_addr_t iphdr_src;
 
   /* ICMP header + IP header + 8 bytes of data */
-  //为差错报文申请pbuf空间，pbuf中预留IP首部和以太网首部空间，pbuf数据区
-  //长度=差错报文首部+差错报文数据长度(IP首部长度+8)
+  //为\B2\EE\B4\ED\B1\A8\CE\C4\C9\EA\C7\EBpbuf\BF占洌琾buf\D6\D0预\C1\F4IP\CA撞\BF\BA\CD\D2\D4太\CD\F8\CA撞\BF\BF占洌琾buf\CA\FD\BE\DD\C7\F8
+  //\B3\A4\B6\C8=\B2\EE\B4\ED\B1\A8\CE\C4\CA撞\BF+\B2\EE\B4\ED\B1\A8\CE\C4\CA\FD\BE莩\A4\B6\C8(IP\CA撞\BF\B3\A4\B6\C8+8)
   q = pbuf_alloc(PBUF_IP, sizeof(struct icmp_echo_hdr) + IP_HLEN + ICMP_DEST_UNREACH_DATASIZE,
                  PBUF_RAM);
-  if (q == NULL) {//失败，返回
+  if (q == NULL) {//失\B0埽\AC\B7\B5\BB\D8
     LWIP_DEBUGF(ICMP_DEBUG, ("icmp_time_exceeded: failed to allocate pbuf for ICMP packet.\n"));
     return;
   }
   LWIP_ASSERT("check that first pbuf can hold icmp message",
              (q->len >= (sizeof(struct icmp_echo_hdr) + IP_HLEN + ICMP_DEST_UNREACH_DATASIZE)));
 
-  iphdr = (struct ip_hdr *)p->payload;//指向引起差错的IP数据包首部
+  iphdr = (struct ip_hdr *)p->payload;//指\CF\F2\D2\FD\C6\F0\B2\EE\B4\ED\B5\C4IP\CA\FD\BE莅\FC\CA撞\BF
   LWIP_DEBUGF(ICMP_DEBUG, ("icmp_time_exceeded from "));
   ip_addr_debug_print(ICMP_DEBUG, &(iphdr->src));
   LWIP_DEBUGF(ICMP_DEBUG, (" to "));
   ip_addr_debug_print(ICMP_DEBUG, &(iphdr->dest));
   LWIP_DEBUGF(ICMP_DEBUG, ("\n"));
 
-  icmphdr = (struct icmp_echo_hdr *)q->payload;//指向差错报文首部
-  icmphdr->type = type;//填写类型字段
-  icmphdr->code = code;//填写代码字段
-  icmphdr->id = 0;//对于目的不可达和数据报超时
-  icmphdr->seqno = 0;//报文，首部剩余的4个字节都为0
+  icmphdr = (struct icmp_echo_hdr *)q->payload;//指\CF\F2\B2\EE\B4\ED\B1\A8\CE\C4\CA撞\BF
+  icmphdr->type = type;//\CC\EE写\C0\E0\D0\CD\D7侄\CE
+  icmphdr->code = code;//\CC\EE写\B4\FA\C2\EB\D7侄\CE
+  icmphdr->id = 0;//\B6\D4\D3\DA目\B5牟\BB\BF纱\EF\BA\CD\CA\FD\BE荼\A8\B3\AC时
+  icmphdr->seqno = 0;//\B1\A8\CE模\AC\CA撞\BF剩\D3\E0\B5\C44\B8\F6\D7纸诙\BC为0
 
-  /* copy fields from original packet 将引起差错的IP数据报的IP首部+8字节数据拷贝到差错报文数据区*/
+  /* copy fields from original packet \BD\AB\D2\FD\C6\F0\B2\EE\B4\ED\B5\C4IP\CA\FD\BE荼\A8\B5\C4IP\CA撞\BF+8\D7纸\DA\CA\FD\BE菘\BD\B1\B4\B5\BD\B2\EE\B4\ED\B1\A8\CE\C4\CA\FD\BE\DD\C7\F8*/
   SMEMCPY((u8_t *)q->payload + sizeof(struct icmp_echo_hdr), (u8_t *)p->payload,
           IP_HLEN + ICMP_DEST_UNREACH_DATASIZE);
 
   /* calculate checksum */
-  icmphdr->chksum = 0;//报文校验和字段清0
-  icmphdr->chksum = inet_chksum(icmphdr, q->len);//计算填写校验和
+  icmphdr->chksum = 0;//\B1\A8\CE\C4校\D1\E9\BA\CD\D7侄\CE\C7\E50
+  icmphdr->chksum = inet_chksum(icmphdr, q->len);//\BC\C6\CB\E3\CC\EE写校\D1\E9\BA\CD
   ICMP_STATS_INC(icmp.xmit);
   /* increase number of messages attempted to send */
   snmp_inc_icmpoutmsgs();
   /* increase number of destination unreachable messages attempted to send */
   snmp_inc_icmpouttimeexcds();
   ip_addr_copy(iphdr_src, iphdr->src);
-  ip_output(q, NULL, &iphdr_src, ICMP_TTL, 0, IP_PROTO_ICMP);//调用IP层函数输出ICMP报文
+  ip_output(q, NULL, &iphdr_src, ICMP_TTL, 0, IP_PROTO_ICMP);//\B5\F7\D3\C3IP\B2愫痋CA\FD\CA\E4\B3\F6ICMP\B1\A8\CE\C4
   pbuf_free(q);
 }
 
