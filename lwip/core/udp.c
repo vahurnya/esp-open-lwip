@@ -479,7 +479,7 @@ udp_sendto_chksum(struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *dst_ip,
         } else
 #endif
                 // COULD be a broadcast, use the hint in the pcb!
-                if(dst_ip->addr = IPADDR_BROADCAST) {
+                if(dst_ip->addr == IPADDR_BROADCAST) {
                 LWIP_DEBUGF(UDP_DEBUG | LWIP_DBG_TRACE, ("udp_send: dest is broadcast\n"));
                 netif = ip_route((&(pcb->local_ip)));
 
