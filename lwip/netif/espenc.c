@@ -78,6 +78,7 @@ static void writePhy(uint8_t address, uint16_t data) {
 static void readBuf(uint16_t len, uint8_t* data) {
         // force CS pin here, as it requires multiple bytes to be sent
         log("readBuf()");
+	while(spi_busy(HSPI)); // seems to fix a sync problem
         chipEnable();
         if(len != 0) {
                 spi_transaction(HSPI, 8, ENC28J60_READ_BUF_MEM, 0, 0, 0, 0, 0, 0);
@@ -95,6 +96,7 @@ static void readBuf(uint16_t len, uint8_t* data) {
 
 static void writeBuf(uint16_t len, const uint8_t* data) {
         // force CS pin here, as it requires multiple bytes to be sent
+	while(spi_busy(HSPI)); // seems to fix a sync problem
         chipEnable();
         if(len != 0) {
                 spi_transaction(HSPI, 8, ENC28J60_WRITE_BUF_MEM, 0, 0, 8, 0, 0, 0);
