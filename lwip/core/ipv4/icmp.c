@@ -63,7 +63,7 @@
 /* The amount of data from the original packet to return in a dest-unreachable */
 #define ICMP_DEST_UNREACH_DATASIZE 8
 
-static void icmp_send_response(struct pbuf *p, u8_t type, u8_t code);
+static void icmp_send_response(struct pbuf *p, u8_t type, u8_t code, u16_t mtu);
 
 /**
  * Processes ICMP input packets, called from ip_input().
@@ -256,7 +256,7 @@ memerr:
 void
 icmp_dest_unreach(struct pbuf *p, enum icmp_dur_type t)
 {
-  icmp_send_response(p, ICMP_DUR, t);
+  icmp_send_response(p, ICMP_DUR, t, 0);
 }
 
 #if IP_FORWARD || IP_REASSEMBLY
@@ -267,13 +267,26 @@ icmp_dest_unreach(struct pbuf *p, enum icmp_dur_type t)
  *          p->payload pointing to the IP header
  * @param t type of the 'time exceeded' packet
  */
-void
+void ICACHE_FLASH_ATTR
 icmp_time_exceeded(struct pbuf *p, enum icmp_te_type t)
 {
-  icmp_send_response(p, ICMP_TE, t);
+  icmp_send_response(p, ICMP_TE, t, 0);
 }
-
 #endif /* IP_FORWARD || IP_REASSEMBLY */
+
+#if IP_FORWARD
+/**
+ * See RFC 1191, the difference here is
+ *  we will always send message too large, even if DF bit is 0.
+ *
+ * @param p the input packet for which the too large should be sent,
+ *      p->payload pointing to the IP header.
+ * @param mtu maximum transmission unit.
+ */
+void ICACHE_FLASH_ATTR icmp_datagram_too_big(struct pbuf *p, u16_t mtu) {
+        icmp_send_response(p, ICMP_DUR, ICMP_DUR_FRAG, mtu);
+}
+#endif
 
 /**
  * Send an icmp packet in response to an incoming packet.
@@ -282,9 +295,10 @@ icmp_time_exceeded(struct pbuf *p, enum icmp_te_type t)
  *          p->payload pointing to the IP header
  * @param type Type of the ICMP header
  * @param code Code of the ICMP header
+ * @param mtu extra MTU data, normally zero
  */
 static void ICACHE_FLASH_ATTR
-icmp_send_response(struct pbuf *p, u8_t type, u8_t code)
+icmp_send_response(struct pbuf *p, u8_t type, u8_t code, u16_t mtu)
 {
   struct pbuf *q;
   struct ip_hdr *iphdr;
@@ -298,14 +312,14 @@ icmp_send_response(struct pbuf *p, u8_t type, u8_t code)
   q = pbuf_alloc(PBUF_IP, sizeof(struct icmp_echo_hdr) + IP_HLEN + ICMP_DEST_UNREACH_DATASIZE,
                  PBUF_RAM);
   if (q == NULL) {//ʧ\B0ܣ\AC\B7\B5\BB\D8
-    LWIP_DEBUGF(ICMP_DEBUG, ("icmp_time_exceeded: failed to allocate pbuf for ICMP packet.\n"));
+    LWIP_DEBUGF(ICMP_DEBUG, ("icmp_send_response: failed to allocate pbuf for ICMP packet.\n"));
     return;
   }
   LWIP_ASSERT("check that first pbuf can hold icmp message",
              (q->len >= (sizeof(struct icmp_echo_hdr) + IP_HLEN + ICMP_DEST_UNREACH_DATASIZE)));
 
   iphdr = (struct ip_hdr *)p->payload;//ָ\CF\F2\D2\FD\C6\F0\B2\EE\B4\ED\B5\C4IP\CA\FD\BEݰ\FC\CAײ\BF
-  LWIP_DEBUGF(ICMP_DEBUG, ("icmp_time_exceeded from "));
+  LWIP_DEBUGF(ICMP_DEBUG, ("icmp_send_response from "));
   ip_addr_debug_print(ICMP_DEBUG, &(iphdr->src));
   LWIP_DEBUGF(ICMP_DEBUG, (" to "));
   ip_addr_debug_print(ICMP_DEBUG, &(iphdr->dest));
@@ -315,7 +329,7 @@ icmp_send_response(struct pbuf *p, u8_t type, u8_t code)
   icmphdr->type = type;//\CC\EEд\C0\E0\D0\CD\D7ֶ\CE
   icmphdr->code = code;//\CC\EEд\B4\FA\C2\EB\D7ֶ\CE
   icmphdr->id = 0;//\B6\D4\D3\DAĿ\B5Ĳ\BB\BFɴ\EF\BA\CD\CA\FD\BEݱ\A8\B3\ACʱ
-  icmphdr->seqno = 0;//\B1\A8\CEģ\AC\CAײ\BFʣ\D3\E0\B5\C44\B8\F6\D7ֽڶ\BCΪ0
+  icmphdr->seqno = htons(mtu);//\B1\A8\CEģ\AC\CAײ\BFʣ\D3\E0\B5\C44\B8\F6\D7ֽڶ\BCΪ0
 
   /* copy fields from original packet \BD\AB\D2\FD\C6\F0\B2\EE\B4\ED\B5\C4IP\CA\FD\BEݱ\A8\B5\C4IP\CAײ\BF+8\D7ֽ\DA\CA\FD\BEݿ\BD\B1\B4\B5\BD\B2\EE\B4\ED\B1\A8\CE\C4\CA\FD\BE\DD\C7\F8*/
   SMEMCPY((u8_t *)q->payload + sizeof(struct icmp_echo_hdr), (u8_t *)p->payload,

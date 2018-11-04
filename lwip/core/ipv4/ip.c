@@ -1020,6 +1020,14 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   snmp_inc_ipforwdatagrams();
 
   PERF_STOP("ip_forward");
+  /* check MTU, see RFC 1191 */
+  u16_t dif = netif->mtu;
+  //os_printf("ip_forward: checking mtu %c%c %d < %d\r\n", netif->name[0], netif->name[1], dif, p->tot_len);
+  if(dif < p->tot_len) {
+          //os_printf("ip_forward: datagram too big for %c%c %d, %d -> %d\r\n", netif->name[0], netif->name[1], netif->mtu, p->tot_len, dif);
+          icmp_datagram_too_big(p, dif);
+          return;
+  }
   /* transmit pbuf on chosen interface */
   netif->output(netif, p, &current_iphdr_dest);
   return;
