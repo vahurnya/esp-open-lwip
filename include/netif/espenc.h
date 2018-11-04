@@ -226,7 +226,7 @@ struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_
 
 // max frame length which the controller will accept:
 // (note: maximum ethernet frame length would be 1518)
-#define MAX_FRAMELEN      1500
+#define MAX_FRAMELEN      1518
 
 #define FULL_SPEED  1   // switch to full-speed SPI for bulk transfers
 

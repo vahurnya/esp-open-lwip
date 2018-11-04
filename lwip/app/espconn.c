@@ -449,7 +449,7 @@ espconn_sendto(struct espconn *espconn, uint8 *psent, uint16 length)
 {
 	espconn_msg *pnode = NULL;
 	bool value = false;
-	err_t error = ESPCONN_OK;
+	//err_t error = ESPCONN_OK;
 
 	if (espconn == NULL || psent == NULL || length == 0) {
 		return ESPCONN_ARG;

@@ -125,11 +125,9 @@ void ICACHE_FLASH_ATTR enc28j60_int_enable(uint8_t interrupts) {
 }
 
 err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p) {
-        uint8_t retry = 0;
         uint16_t len = p->tot_len;
 
         uint8_t interrupts = enc28j60_int_disable();
-
         log("output, tot_len: %d", p->tot_len);
         uint8_t isUp = (readPhyByte(PHSTAT2) >> 2) & 1;
         log("link is up: %d", isUp);
@@ -141,15 +139,13 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
         SetBank(EIR);
         writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF | EIR_TXIF);
 
-        if(retry == 0) {
-                writeReg(EWRPT, TXSTART_INIT);
-                writeReg(ETXND, TXSTART_INIT + len);
-                //writeOp(ENC28J60_WRITE_BUF_MEM, 0, 0x00);
-                uint8_t* buffer = (uint8_t*) os_malloc(len);
-                pbuf_copy_partial(p, buffer, p->tot_len, 0);
-                writeBuf(len, buffer);
-                os_free(buffer);
-        }
+        writeReg(EWRPT, TXSTART_INIT);
+        writeReg(ETXND, TXSTART_INIT + len);
+        //writeOp(ENC28J60_WRITE_BUF_MEM, 0, 0x00);
+        uint8_t* buffer = (uint8_t*) os_malloc(len);
+        pbuf_copy_partial(p, buffer, p->tot_len, 0);
+        writeBuf(len, buffer);
+        os_free(buffer);
 
         SetBank(EIR);
         writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF | EIR_TXIF);
