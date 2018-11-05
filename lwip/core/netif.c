@@ -753,11 +753,12 @@ netif_poll(struct netif *netif)
     SYS_ARCH_UNPROTECT(lev);
 
     if (in != NULL) {
+os_printf("DEQUEUE %d at %x\r\n", in->tot_len, in);
       LINK_STATS_INC(link.recv);
       snmp_add_ifinoctets(stats_if, in->tot_len);
       snmp_inc_ifinucastpkts(stats_if);
-      /* loopback packets are always IP packets! */
-      if (ip_input(in, netif) != ERR_OK) {
+      /* give it to the netif's input function */
+      if (netif->input(in, netif) != ERR_OK) {
         pbuf_free(in);
       }
       /* Don't reference the packet any more! */

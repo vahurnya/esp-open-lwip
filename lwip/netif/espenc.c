@@ -6,6 +6,7 @@
 #include "mem.h"
 
 struct netif enc_netif;
+netif_status_callback_fn netif_enc_action;
 
 static uint8_t Enc28j60Bank;
 static uint16_t NextPacketPtr;
@@ -22,6 +23,7 @@ void ICACHE_FLASH_ATTR chipDisable() {
 }
 
 uint8_t readOp(uint8_t op, uint8_t addr) {
+	while(spi_busy(HSPI)); 
         if(addr & 0x80)
                 return(uint8_t) spi_transaction(HSPI, 3, op >> 5, 5, addr, 0, 0, 16, 0) & 0xff; // Ignore dummy first byte
         else
@@ -29,6 +31,7 @@ uint8_t readOp(uint8_t op, uint8_t addr) {
 }
 
 void writeOp(uint8_t op, uint8_t addr, uint8_t data) {
+	while(spi_busy(HSPI)); 
         spi_transaction(HSPI, 3, op >> 5, 5, addr, 8, data, 0, 0);
 }
 
@@ -160,10 +163,11 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
 
         if(!(eir & EIR_TXERIF) && count < 1000U) {
                 // no error; start new transmission
-                log("transmission success");
+                log1("transmission success");
         } else {
-                log("transmission failed (%d - %02x)", count, eir);
+                log1("transmission failed (%d - %02x)", count, eir);
         }
+os_delay_us(1000);
 
         SetBank(ECON1);
         writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
@@ -198,6 +202,7 @@ void enc28j60_handle_packets(void) {
                 if(p != 0) {
                         uint8_t* data;
                         struct pbuf* q;
+                        struct pbuf* last;
 
                         for(q = p; q != 0; q = q->next) {
                                 data = q->payload;
@@ -207,8 +212,32 @@ void enc28j60_handle_packets(void) {
                                 readBuf(len, data);
                         }
 
-                        log("packet received, passing to netif->input");
-                        enc_netif.input(p, &enc_netif);
+//                        log("packet received, passing to netif->input");
+//                        enc_netif.input(p, &enc_netif);
+
+			/* let last point to the last pbuf in chain r */
+			for (last = p; last->next != NULL; last = last->next);
+os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
+			SYS_ARCH_PROTECT(lev);
+			if(enc_netif.loop_first != NULL) {
+			    LWIP_ASSERT("if first != NULL, last must also be != NULL", enc_netif.loop_last != NULL);
+			    enc_netif.loop_last->next = p;
+			    enc_netif.loop_last = last;
+			} else {
+			    enc_netif.loop_first = p;
+			    enc_netif.loop_last = last;
+			}
+			SYS_ARCH_UNPROTECT(lev);
+
+#if LWIP_NETIF_LOOPBACK_MULTITHREADING
+			// For multithreading environment, schedule a call to netif_poll
+			tcpip_callback((tcpip_callback_fn)netif_poll, &enc_netif);
+#else
+			// user defined callback
+			if (netif_enc_action != NULL)
+			    netif_enc_action(&enc_netif);
+#endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
+
                 } else {
                         log("pbuf_alloc failed!");
                 }
@@ -351,13 +380,15 @@ err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
         return ERR_OK;
 }
 
-struct netif* ICACHE_FLASH_ATTR espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp) {
+struct netif* ICACHE_FLASH_ATTR espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp, netif_status_callback_fn cb) {
         ip_addr_t nulladdr;
         struct netif* new_netif;
 
         IP4_ADDR(&nulladdr, 0, 0, 0, 0);
 
         os_memcpy(enc_netif.hwaddr, mac_addr, 6);
+
+	netif_enc_action = cb;
 
         if(dhcp) {
                 new_netif = netif_add(&enc_netif, &nulladdr, &nulladdr, &nulladdr, NULL, enc28j60_init, ethernet_input);

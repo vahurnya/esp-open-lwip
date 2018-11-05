@@ -3,10 +3,11 @@
 
 err_t enc28j60_link_output(struct netif *netif, struct pbuf *p);
 err_t enc28j60_init(struct netif *netif);
-struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp);
+struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp, netif_status_callback_fn cb);
 
 #define log(s, ...)
 //#define log(s, ...) os_printf ("[%s:%s:%d] " s "\n", __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define log1(s, ...) os_printf ("[%s:%s:%d] " s "\n", __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define ESP_CS 15
 #define ESP_INT 5
