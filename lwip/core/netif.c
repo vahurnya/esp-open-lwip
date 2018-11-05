@@ -753,7 +753,7 @@ netif_poll(struct netif *netif)
     SYS_ARCH_UNPROTECT(lev);
 
     if (in != NULL) {
-os_printf("DEQUEUE %d at %x\r\n", in->tot_len, in);
+//os_printf("DEQUEUE %d at %x\r\n", in->tot_len, in);
       LINK_STATS_INC(link.recv);
       snmp_add_ifinoctets(stats_if, in->tot_len);
       snmp_inc_ifinucastpkts(stats_if);

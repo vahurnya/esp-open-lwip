@@ -163,14 +163,23 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
 
         if(!(eir & EIR_TXERIF) && count < 1000U) {
                 // no error; start new transmission
-                log1("transmission success");
+                log("transmission success");
+        	SetBank(ECON1);
+		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
         } else {
-                log1("transmission failed (%d - %02x)", count, eir);
-        }
-os_delay_us(1000);
+                log("transmission failed (%d - %02x)", count, eir);
+		// wait - the longer the packet, the longer the wait
+		os_delay_us(2 * len);
 
-        SetBank(ECON1);
-        writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
+        	SetBank(ECON1);
+		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
+        }
+
+        //SetBank(ECON1);
+	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
+        //writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
 
         enc28j60_int_enable(interrupts);
 }
@@ -217,7 +226,7 @@ void enc28j60_handle_packets(void) {
 
 			/* let last point to the last pbuf in chain r */
 			for (last = p; last->next != NULL; last = last->next);
-os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
+//os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
 			SYS_ARCH_PROTECT(lev);
 			if(enc_netif.loop_first != NULL) {
 			    LWIP_ASSERT("if first != NULL, last must also be != NULL", enc_netif.loop_last != NULL);
