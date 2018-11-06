@@ -164,22 +164,12 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
         if(!(eir & EIR_TXERIF) && count < 1000U) {
                 // no error; start new transmission
                 log("transmission success");
-        	SetBank(ECON1);
-		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
         } else {
-                log("transmission failed (%d - %02x)", count, eir);
-		// wait - the longer the packet, the longer the wait
-		os_delay_us(2 * len);
-
-        	SetBank(ECON1);
-		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
-		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
+                log1("transmission failed (%d - %02x)", count, eir);
         }
 
-        //SetBank(ECON1);
-	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
-	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
-        //writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
+        SetBank(ECON1);
+	writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
 
         enc28j60_int_enable(interrupts);
 }
@@ -221,9 +211,10 @@ void enc28j60_handle_packets(void) {
                                 readBuf(len, data);
                         }
 
-//                        log("packet received, passing to netif->input");
-//                        enc_netif.input(p, &enc_netif);
-
+#if !ENC_SW_INTERRUPT
+                        log("packet received, passing to netif->input");
+                        enc_netif.input(p, &enc_netif);
+#else
 			/* let last point to the last pbuf in chain r */
 			for (last = p; last->next != NULL; last = last->next);
 //os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
@@ -246,7 +237,7 @@ void enc28j60_handle_packets(void) {
 			if (netif_enc_action != NULL)
 			    netif_enc_action(&enc_netif);
 #endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
-
+#endif
                 } else {
                         log("pbuf_alloc failed!");
                 }
@@ -397,8 +388,11 @@ struct netif* ICACHE_FLASH_ATTR espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip
 
         os_memcpy(enc_netif.hwaddr, mac_addr, 6);
 
+#if ENC_SW_INTERRUPT
 	netif_enc_action = cb;
-
+#else
+	netif_enc_action = NULL;
+#endif
         if(dhcp) {
                 new_netif = netif_add(&enc_netif, &nulladdr, &nulladdr, &nulladdr, NULL, enc28j60_init, ethernet_input);
                 if(new_netif) {
