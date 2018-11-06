@@ -23,7 +23,7 @@ void ICACHE_FLASH_ATTR chipDisable() {
 }
 
 uint8_t readOp(uint8_t op, uint8_t addr) {
-	while(spi_busy(HSPI)); 
+	while(spi_busy(HSPI));
         if(addr & 0x80)
                 return(uint8_t) spi_transaction(HSPI, 3, op >> 5, 5, addr, 0, 0, 16, 0) & 0xff; // Ignore dummy first byte
         else
@@ -31,7 +31,7 @@ uint8_t readOp(uint8_t op, uint8_t addr) {
 }
 
 void writeOp(uint8_t op, uint8_t addr, uint8_t data) {
-	while(spi_busy(HSPI)); 
+	while(spi_busy(HSPI));
         spi_transaction(HSPI, 3, op >> 5, 5, addr, 8, data, 0, 0);
 }
 
@@ -164,12 +164,22 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
         if(!(eir & EIR_TXERIF) && count < 1000U) {
                 // no error; start new transmission
                 log("transmission success");
+        	SetBank(ECON1);
+		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
         } else {
-                log1("transmission failed (%d - %02x)", count, eir);
+                log("transmission failed (%d - %02x)", count, eir);
+		// wait - the longer the packet, the longer the wait
+		os_delay_us(2 * len);
+
+        	SetBank(ECON1);
+		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
         }
 
-        SetBank(ECON1);
-	writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
+        //SetBank(ECON1);
+	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
+        //writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
 
         enc28j60_int_enable(interrupts);
 }
