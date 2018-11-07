@@ -262,3 +262,4 @@ void enc_scoop_packets(void);
 // to use this functionality
 #define ENC_HEAP_START      SCRATCH_LIMIT
 #define ENC_HEAP_END        0x2000
+
