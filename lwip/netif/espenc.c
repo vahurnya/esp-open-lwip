@@ -10,6 +10,8 @@ netif_status_callback_fn netif_enc_action;
 
 static uint8_t Enc28j60Bank;
 static uint16_t NextPacketPtr;
+static volatile bool inint = false;
+static volatile bool handling_int = false;
 
 void ICACHE_FLASH_ATTR chipEnable() {
         // Force CS pin low (FIXME)
@@ -114,6 +116,7 @@ static void writeBuf(uint16_t len, const uint8_t* data) {
         chipDisable();
 }
 
+/*
 uint8_t ICACHE_FLASH_ATTR enc28j60_int_disable() {
         uint8_t interrupts = 0;
         SetBank(EIE);
@@ -126,11 +129,18 @@ void ICACHE_FLASH_ATTR enc28j60_int_enable(uint8_t interrupts) {
         SetBank(EIE);
         writeOp(ENC28J60_BIT_FIELD_SET, EIE, interrupts);
 }
-
+*/
 err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p) {
+        // Is this called from a critical section?
+        if(inint) {
+                if(handling_int) {
+                        log1("OOPS handling int!");
+                }
+        }
+        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_DISABLE);
         uint16_t len = p->tot_len;
 
-        uint8_t interrupts = enc28j60_int_disable();
+//        uint8_t interrupts = enc28j60_int_disable();
         log("output, tot_len: %d", p->tot_len);
         uint8_t isUp = (readPhyByte(PHSTAT2) >> 2) & 1;
         log("link is up: %d", isUp);
@@ -166,14 +176,19 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
                 log("transmission success");
         	SetBank(ECON1);
 		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
+                        SetBank(EIR);
+                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
         } else {
-                log("transmission failed (%d - %02x)", count, eir);
+                log1("transmission failed (%d - %02x)", count, eir);
 		// wait - the longer the packet, the longer the wait
 		os_delay_us(2 * len);
 
         	SetBank(ECON1);
 		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
 		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
+                        SetBank(EIR);
+                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
+                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
         }
 
         //SetBank(ECON1);
@@ -181,7 +196,9 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
 	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
         //writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
 
-        enc28j60_int_enable(interrupts);
+//        enc28j60_int_enable(interrupts);
+        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
+        return 0;
 }
 
 static uint32_t interrupt_reg = 0;
@@ -257,25 +274,64 @@ void enc28j60_handle_packets(void) {
         writeReg(ERXRDPT, NextPacketPtr);
 }
 
+void enc_scoop_packets(void) {
+        handling_int = true;
+        while(readRegByte(EPKTCNT) > 0)
+                enc28j60_handle_packets();
+
+        SetBank(EIR);
+        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
+        // ready for next IRQ
+        //log1("INT F");
+        handling_int=false;
+        inint = false;
+        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
+}
+
 void interrupt_handler(void *arg) {
-        ETS_GPIO_INTR_DISABLE();
-        GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, GPIO_REG_READ(GPIO_STATUS_ADDRESS));
+        inint = true;
+        //log1("INT T");
+        uint32 gpio_status = GPIO_REG_READ(GPIO_STATUS_ADDRESS);
 
-        uint8_t interrupt = readRegByte(EIR);
-        uint8_t pktCnt = readRegByte(EPKTCNT);
+        //ETS_GPIO_INTR_DISABLE();
+        //GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, GPIO_REG_READ(GPIO_STATUS_ADDRESS));
 
-        log(" *** INTERRUPT (%02X / %d) ***", interrupt, pktCnt);
+        if(1 << ESP_INT & gpio_status) {
+                gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_DISABLE);
 
-        if(pktCnt > 0) {
-                log("pktCnt > 0");
+                uint8_t interrupt = readRegByte(EIR);
+                uint8_t pktCnt = readRegByte(EPKTCNT);
 
-                while(readRegByte(EPKTCNT) > 0)
-                        enc28j60_handle_packets();
+                log("\r\n *** INTERRUPT (%02X / %d) ***", interrupt, pktCnt);
 
-                //SetBank(EIE);
-                //writeOp(ENC28J60_BIT_FIELD_CLR, EIE, EIE_PKTIE);
+                if(pktCnt > 0 && (interrupt & EIR_PKTIF)) {
+                        log("pktCnt > 0");
+#if ENC_SCOOPS
+       // ACK interrupt
+                        GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT(ESP_INT));
+
+                        system_os_post(0, 9, 0);
+                }
+#else
+                        while(readRegByte(EPKTCNT) > 0)
+                                enc28j60_handle_packets();
+
+                        SetBank(EIR);
+                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
+                        //SetBank(EIE);
+                        //writeOp(ENC28J60_BIT_FIELD_CLR, EIE, EIE_PKTIE);
+                }
+                // ACK interrupt
+                GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT(ESP_INT));
+                // ready for next IRQ
+                inint = false;
+                gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
+#endif
         }
 
+        // Else ignore the IRQ.
+
+        /*
         if(interrupt & EIR_PKTIF) {
                 log("PKTIF interrupt");
                 SetBank(EIR);
@@ -294,8 +350,8 @@ void interrupt_handler(void *arg) {
                 SetBank(EIR);
                 writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
         }
-
         ETS_GPIO_INTR_ENABLE();
+        */
 }
 
 // http://lwip.wikia.com/wiki/Writing_a_device_driver
@@ -309,10 +365,9 @@ err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
                 | GPIO_PIN_SOURCE_SET(GPIO_AS_PIN_SOURCE));
 
         GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << ESP_INT);
-        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_NEGEDGE);
+        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
 
         log("interrupts enabled");
-
         log("initializing");
         netif->linkoutput = enc28j60_link_output;
         netif->name[0] = 'e';
