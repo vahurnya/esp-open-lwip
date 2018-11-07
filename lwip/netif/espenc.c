@@ -241,30 +241,28 @@ void enc28j60_handle_packets(void) {
 #if !ENC_SW_INTERRUPT
                         log("packet received, passing to netif->input");
                         enc_netif.input(p, &enc_netif);
-#else
-			/* let last point to the last pbuf in chain r */
-			for (last = p; last->next != NULL; last = last->next);
-//os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
-			SYS_ARCH_PROTECT(lev);
-			if(enc_netif.loop_first != NULL) {
-			    LWIP_ASSERT("if first != NULL, last must also be != NULL", enc_netif.loop_last != NULL);
-			    enc_netif.loop_last->next = p;
-			    enc_netif.loop_last = last;
-			} else {
-			    enc_netif.loop_first = p;
-			    enc_netif.loop_last = last;
-			}
-			SYS_ARCH_UNPROTECT(lev);
 
-#if LWIP_NETIF_LOOPBACK_MULTITHREADING
-			// For multithreading environment, schedule a call to netif_poll
-			tcpip_callback((tcpip_callback_fn)netif_poll, &enc_netif);
 #else
-			// user defined callback
-			if (netif_enc_action != NULL)
-			    netif_enc_action(&enc_netif);
-#endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
-#endif
+			if (netif_enc_action != NULL) {
+			    log("packet received, no callback, passing to netif->input");
+			    enc_netif.input(p, &enc_netif);
+			} else {
+			    /* let last point to the last pbuf in chain r */
+			    for (last = p; last->next != NULL; last = last->next);
+			    SYS_ARCH_PROTECT(lev);
+			    if(enc_netif.loop_first != NULL) {
+				LWIP_ASSERT("if first != NULL, last must also be != NULL", enc_netif.loop_last != NULL);
+				enc_netif.loop_last->next = p;
+				enc_netif.loop_last = last;
+			     } else {
+				enc_netif.loop_first = p;
+				enc_netif.loop_last = last;
+			     }
+			     SYS_ARCH_UNPROTECT(lev);
+			     // user defined callback
+			     netif_enc_action(&enc_netif);
+			}
+#endif /* !ENC_SW_INTERRUPT */
                 } else {
                         log("pbuf_alloc failed!");
                 }
@@ -445,7 +443,11 @@ err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
         return ERR_OK;
 }
 
+#if ENC_SW_INTERRUPT
 struct netif* ICACHE_FLASH_ATTR espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp, netif_status_callback_fn cb) {
+#else
+struct netif* ICACHE_FLASH_ATTR espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp) {
+#endif
         ip_addr_t nulladdr;
         struct netif* new_netif;
 
