@@ -24,6 +24,7 @@ GPIO13 <---> MOSI
 GPIO14 <---> SCLK
 GPIO15 <---> CS
 GPIO5  <---> INT
+GPIO4  <---> RESET
 Q3/V33 <---> 3.3V
 GND    <---> GND
 ```

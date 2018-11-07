@@ -134,7 +134,7 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
         // Is this called from a critical section?
         if(inint) {
                 if(handling_int) {
-                        log1("OOPS handling int!");
+                        os_printf("OOPS handling int!");
                 }
         }
         gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_DISABLE);
@@ -179,7 +179,7 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
                         SetBank(EIR);
                         writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
         } else {
-                log1("transmission failed (%d - %02x)", count, eir);
+                log("transmission failed (%d - %02x)", count, eir);
 		// wait - the longer the packet, the longer the wait
 		os_delay_us(2 * len);
 
