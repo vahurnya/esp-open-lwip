@@ -30,6 +30,24 @@ GND    <---> GND
 ```
 In addition you will need a transistor for decoupling GPIO15, otherwise your ESP will not boot any more, see: https://esp8266hints.wordpress.com/category/ethernet/
 
+Usage:
+Simply connect the enc28j60 as described above, include "lwip/netif" and "netif/espenc.h".
+A hardware reset in the ESP's init is optional, but it ensures that an ESP reset also resets the enc. It is done by toggeling GPIO4 (0 and 1), e.g. using the easygpio lib:
+```
+#define ENC28J60_HW_RESET 4
+
+easygpio_pinMode(ENC28J60_HW_RESET, EASYGPIO_PULLUP, EASYGPIO_OUTPUT);
+easygpio_outputSet(ENC28J60_HW_RESET, 0);
+os_delay_us(500);
+easygpio_outputSet(ENC28J60_HW_RESET, 1);
+os_delay_us(1000);
+```
+
+Initialize the Ethernet interface in your code by calling the init function:
+```
+struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp);
+```
+
 ## Static Routing Table
 
 IPv4 now has a static routing table. In "ip_route.h" there are these new functions:
