@@ -6,7 +6,17 @@
 #include "mem.h"
 
 struct netif enc_netif;
-netif_status_callback_fn netif_enc_action;
+
+typedef enum {
+        SIG_DO_NOTHING = 0,
+        SIG_NETIF_POLL,
+        SIG_ENC_SCOOP
+} USER_SIGNALS;
+
+#define swint_TaskPrio        2
+#define swint_TaskQueueLen    2
+os_event_t    swint_TaskQueue[swint_TaskQueueLen];
+static void swint_Task(os_event_t *events);
 
 static uint8_t Enc28j60Bank;
 static uint16_t NextPacketPtr;
@@ -260,9 +270,8 @@ void enc28j60_handle_packets(void) {
 			// For multithreading environment, schedule a call to netif_poll
 			tcpip_callback((tcpip_callback_fn)netif_poll, &enc_netif);
 #else
-			// user defined callback
-			if (netif_enc_action != NULL)
-			    netif_enc_action(&enc_netif);
+			system_os_post(swint_TaskPrio, SIG_NETIF_POLL, (ETSParam) &enc_netif);
+
 #endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
 #endif
                 } else {
@@ -290,6 +299,31 @@ void enc_scoop_packets(void) {
         gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
 }
 
+// SW Interrupt handler
+static void ICACHE_FLASH_ATTR swint_Task(os_event_t *events)
+{
+    //os_printf("Sig: %d\r\n", events->sig);
+
+    switch(events->sig)
+    {
+    case SIG_ENC_SCOOP:
+            enc_scoop_packets();
+            break;
+
+    case SIG_NETIF_POLL:
+	{
+	    struct netif *netif = (struct netif *) events->par;
+	    netif_poll(netif);
+            break;
+	}
+    case SIG_DO_NOTHING:
+    default:
+        // Intentionally ignoring other signals
+        os_printf("Spurious Signal received\r\n");
+        break;
+    }
+}
+
 void interrupt_handler(void *arg) {
         inint = true;
         //log1("INT T");
@@ -312,7 +346,7 @@ void interrupt_handler(void *arg) {
        // ACK interrupt
                         GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT(ESP_INT));
 
-                        system_os_post(0, 9, 0);
+                        system_os_post(swint_TaskPrio, SIG_ENC_SCOOP, 0);
                 }
 #else
                         while(readRegByte(EPKTCNT) > 0)
@@ -445,23 +479,17 @@ err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
         return ERR_OK;
 }
 
-#if ENC_SW_INTERRUPT
-struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp, netif_status_callback_fn cb) {
-#else
+
 struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp) {
-#endif
         ip_addr_t nulladdr;
         struct netif* new_netif;
+
+	system_os_task(swint_Task, swint_TaskPrio, swint_TaskQueue, swint_TaskQueueLen);
 
         IP4_ADDR(&nulladdr, 0, 0, 0, 0);
 
         os_memcpy(enc_netif.hwaddr, mac_addr, 6);
 
-#if ENC_SW_INTERRUPT
-	netif_enc_action = cb;
-#else
-	netif_enc_action = NULL;
-#endif
         if(dhcp) {
                 new_netif = netif_add(&enc_netif, &nulladdr, &nulladdr, &nulladdr, NULL, enc28j60_init, ethernet_input);
                 if(new_netif) {
@@ -473,6 +501,7 @@ struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_
                         netif_set_up(new_netif);
                 }
         }
+
         return new_netif;
 }
 
