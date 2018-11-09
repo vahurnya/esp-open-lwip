@@ -15,7 +15,7 @@ typedef enum {
 
 #define swint_TaskPrio        2
 #define swint_TaskQueueLen    2
-os_event_t    swint_TaskQueue[swint_TaskQueueLen];
+os_event_t swint_TaskQueue[swint_TaskQueueLen];
 static void swint_Task(os_event_t *events);
 
 static uint8_t Enc28j60Bank;
@@ -24,18 +24,20 @@ static volatile bool inint = false;
 static volatile bool handling_int = false;
 
 void ICACHE_FLASH_ATTR chipEnable() {
-        // Force CS pin low (FIXME)
+        // Force CS pin low
+        while(spi_busy(HSPI));
         PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15);
         GPIO_OUTPUT_SET(ESP_CS, 0);
 }
 
 void ICACHE_FLASH_ATTR chipDisable() {
         // Return to default CS function
+        while(spi_busy(HSPI));
         PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, 2); //GPIO15 is HSPI CS pin (Chip Select / Slave Select)
 }
 
 uint8_t readOp(uint8_t op, uint8_t addr) {
-	while(spi_busy(HSPI));
+        while(spi_busy(HSPI));
         if(addr & 0x80)
                 return(uint8_t) spi_transaction(HSPI, 3, op >> 5, 5, addr, 0, 0, 16, 0) & 0xff; // Ignore dummy first byte
         else
@@ -43,11 +45,12 @@ uint8_t readOp(uint8_t op, uint8_t addr) {
 }
 
 void writeOp(uint8_t op, uint8_t addr, uint8_t data) {
-	while(spi_busy(HSPI));
+        while(spi_busy(HSPI));
         spi_transaction(HSPI, 3, op >> 5, 5, addr, 8, data, 0, 0);
 }
 
 static void SetBank(uint8_t address) {
+        while(spi_busy(HSPI));
         if((address & BANK_MASK) != Enc28j60Bank) {
                 writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_BSEL1 | ECON1_BSEL0);
                 Enc28j60Bank = address & BANK_MASK;
@@ -77,8 +80,7 @@ static void writeReg(uint8_t address, uint16_t data) {
 static uint16_t readPhyByte(uint8_t address) {
         writeRegByte(MIREGADR, address);
         writeRegByte(MICMD, MICMD_MIIRD);
-        while(readRegByte(MISTAT) & MISTAT_BUSY)
-                ;
+        while(readRegByte(MISTAT) & MISTAT_BUSY);
         writeRegByte(MICMD, 0x00);
         return readRegByte(MIRD + 1);
 }
@@ -86,71 +88,47 @@ static uint16_t readPhyByte(uint8_t address) {
 static void writePhy(uint8_t address, uint16_t data) {
         writeRegByte(MIREGADR, address);
         writeReg(MIWR, data);
-        while(readRegByte(MISTAT) & MISTAT_BUSY)
-                ;
+        while(readRegByte(MISTAT) & MISTAT_BUSY);
 }
 
 static void readBuf(uint16_t len, uint8_t* data) {
-        // force CS pin here, as it requires multiple bytes to be sent
         log("readBuf()");
-	while(spi_busy(HSPI)); // seems to fix a sync problem
-        chipEnable();
         if(len != 0) {
+                chipEnable();
                 spi_transaction(HSPI, 8, ENC28J60_READ_BUF_MEM, 0, 0, 0, 0, 0, 0);
                 while(len--) {
                         uint8_t nextbyte;
-
                         while(spi_busy(HSPI)); //wait for SPI transaction to complete
                         nextbyte = spi_transaction(HSPI, 0, 0, 0, 0, 0, 0, 8, 0);
                         *data++ = nextbyte;
                 };
-                while(spi_busy(HSPI)); //wait for SPI transaction to complete
+                chipDisable();
         }
-        chipDisable();
 }
 
 static void writeBuf(uint16_t len, const uint8_t* data) {
-        // force CS pin here, as it requires multiple bytes to be sent
-	while(spi_busy(HSPI)); // seems to fix a sync problem
-        chipEnable();
         if(len != 0) {
+                chipEnable();
                 spi_transaction(HSPI, 8, ENC28J60_WRITE_BUF_MEM, 0, 0, 8, 0, 0, 0);
                 while(len--) {
                         uint8_t nextbyte = *data++;
-
                         while(spi_busy(HSPI)); //wait for SPI transaction to complete
                         spi_transaction(HSPI, 0, 0, 0, 0, 8, nextbyte, 0, 0);
                 };
-                while(spi_busy(HSPI)); //wait for SPI transaction to complete
+                chipDisable();
         }
-        chipDisable();
 }
 
-/*
-uint8_t ICACHE_FLASH_ATTR enc28j60_int_disable() {
-        uint8_t interrupts = 0;
-        SetBank(EIE);
-        interrupts = readRegByte(EIE);
-        writeOp(ENC28J60_BIT_FIELD_CLR, EIE, interrupts);
-        return interrupts;
-}
-
-void ICACHE_FLASH_ATTR enc28j60_int_enable(uint8_t interrupts) {
-        SetBank(EIE);
-        writeOp(ENC28J60_BIT_FIELD_SET, EIE, interrupts);
-}
-*/
 err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p) {
         // Is this called from a critical section?
         if(inint) {
                 if(handling_int) {
-                        os_printf("OOPS handling int!");
+                        os_printf("OOPS handling int!\r\n");
                 }
         }
         gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_DISABLE);
         uint16_t len = p->tot_len;
 
-//        uint8_t interrupts = enc28j60_int_disable();
         log("output, tot_len: %d", p->tot_len);
         uint8_t isUp = (readPhyByte(PHSTAT2) >> 2) & 1;
         log("link is up: %d", isUp);
@@ -178,35 +156,34 @@ err_t ICACHE_FLASH_ATTR enc28j60_link_output(struct netif *netif, struct pbuf *p
 
         uint16_t count = 0;
         uint16_t eir = 0;
-        while(((eir = readRegByte(EIR)) & (EIR_TXIF | EIR_TXERIF)) == 0 && ++count < 1000U)
-                ;
+        /*
+         * Possible Problem: This might only work at 4MHz SPI
+         * so we delay a fixed amount.
+         */
+        while(((eir = readRegByte(EIR)) & (EIR_TXIF | EIR_TXERIF)) == 0 && ++count < 1000U) {
+                os_delay_us(1);
+        }
 
         if(!(eir & EIR_TXERIF) && count < 1000U) {
                 // no error; start new transmission
                 log("transmission success");
-        	SetBank(ECON1);
-		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
-                        SetBank(EIR);
-                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
+                SetBank(ECON1);
+                writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
+                SetBank(EIR);
+                writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
         } else {
                 log("transmission failed (%d - %02x)", count, eir);
-		// wait - the longer the packet, the longer the wait
-		os_delay_us(2 * len);
+                // wait - the longer the packet, the longer the wait
+                os_delay_us(2 * len);
 
-        	SetBank(ECON1);
-		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
-		writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
-                        SetBank(EIR);
-                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
-                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
+                SetBank(ECON1);
+                writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+                writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
+                SetBank(EIR);
+                writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
+                writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
         }
 
-        //SetBank(ECON1);
-	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
-	//writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST | ECON1_TXRTS);
-        //writeOp(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRTS);
-
-//        enc28j60_int_enable(interrupts);
         gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
         return 0;
 }
@@ -249,28 +226,32 @@ void enc28j60_handle_packets(void) {
                         }
 
 #if !ENC_SW_INTERRUPT
+                        /*
+                         *  I think we should ALWAYS use SWI.
+                         *  not doing so crashes horribly under load
+                         */
                         log("packet received, passing to netif->input");
                         enc_netif.input(p, &enc_netif);
 #else
-			/* let last point to the last pbuf in chain r */
-			for (last = p; last->next != NULL; last = last->next);
-//os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
-			SYS_ARCH_PROTECT(lev);
-			if(enc_netif.loop_first != NULL) {
-			    LWIP_ASSERT("if first != NULL, last must also be != NULL", enc_netif.loop_last != NULL);
-			    enc_netif.loop_last->next = p;
-			    enc_netif.loop_last = last;
-			} else {
-			    enc_netif.loop_first = p;
-			    enc_netif.loop_last = last;
-			}
-			SYS_ARCH_UNPROTECT(lev);
+                        /* let last point to the last pbuf in chain r */
+                        for(last = p; last->next != NULL; last = last->next);
+                        // os_printf("ENQUEUE %d at %x\r\n", p->tot_len, p);
+                        SYS_ARCH_PROTECT(lev);
+                        if(enc_netif.loop_first != NULL) {
+                                LWIP_ASSERT("if first != NULL, last must also be != NULL", enc_netif.loop_last != NULL);
+                                enc_netif.loop_last->next = p;
+                                enc_netif.loop_last = last;
+                        } else {
+                                enc_netif.loop_first = p;
+                                enc_netif.loop_last = last;
+                        }
+                        SYS_ARCH_UNPROTECT(lev);
 
 #if LWIP_NETIF_LOOPBACK_MULTITHREADING
-			// For multithreading environment, schedule a call to netif_poll
-			tcpip_callback((tcpip_callback_fn)netif_poll, &enc_netif);
+                        // For multithreading environment, schedule a call to netif_poll
+                        tcpip_callback((tcpip_callback_fn) netif_poll, &enc_netif);
 #else
-			system_os_post(swint_TaskPrio, SIG_NETIF_POLL, (ETSParam) &enc_netif);
+                        system_os_post(swint_TaskPrio, SIG_NETIF_POLL, (ETSParam) & enc_netif);
 
 #endif /* LWIP_NETIF_LOOPBACK_MULTITHREADING */
 #endif
@@ -294,34 +275,33 @@ void enc_scoop_packets(void) {
         writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
         // ready for next IRQ
         //log1("INT F");
-        handling_int=false;
+        handling_int = false;
         inint = false;
         gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
 }
 
 // SW Interrupt handler
-static void ICACHE_FLASH_ATTR swint_Task(os_event_t *events)
-{
-    //os_printf("Sig: %d\r\n", events->sig);
 
-    switch(events->sig)
-    {
-    case SIG_ENC_SCOOP:
-            enc_scoop_packets();
-            break;
+static void ICACHE_FLASH_ATTR swint_Task(os_event_t *events) {
+        //os_printf("Sig: %d\r\n", events->sig);
 
-    case SIG_NETIF_POLL:
-	{
-	    struct netif *netif = (struct netif *) events->par;
-	    netif_poll(netif);
-            break;
-	}
-    case SIG_DO_NOTHING:
-    default:
-        // Intentionally ignoring other signals
-        os_printf("Spurious Signal received\r\n");
-        break;
-    }
+        switch(events->sig) {
+                case SIG_ENC_SCOOP:
+                        enc_scoop_packets();
+                        break;
+
+                case SIG_NETIF_POLL:
+                {
+                        struct netif *netif = (struct netif *) events->par;
+                        netif_poll(netif);
+                        break;
+                }
+                case SIG_DO_NOTHING:
+                default:
+                        // Intentionally ignoring other signals
+                        os_printf("Spurious Signal received\r\n");
+                        break;
+        }
 }
 
 void interrupt_handler(void *arg) {
@@ -342,68 +322,22 @@ void interrupt_handler(void *arg) {
 
                 if(pktCnt > 0 && (interrupt & EIR_PKTIF)) {
                         log("pktCnt > 0");
-#if 1
-       // ACK interrupt
+                        // ACK interrupt
                         GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT(ESP_INT));
 
                         system_os_post(swint_TaskPrio, SIG_ENC_SCOOP, 0);
                 }
-#else
-                        while(readRegByte(EPKTCNT) > 0)
-                                enc28j60_handle_packets();
-
-                        SetBank(EIR);
-                        writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
-                        //SetBank(EIE);
-                        //writeOp(ENC28J60_BIT_FIELD_CLR, EIE, EIE_PKTIE);
-                }
-                // ACK interrupt
+        } else {
+                // Spurious IRQ?
+                os_printf("Spurious IRQ!!!");
                 GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT(ESP_INT));
-                // ready for next IRQ
-                inint = false;
-                gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
-#endif
         }
 
-        // Else ignore the IRQ.
-
-        /*
-        if(interrupt & EIR_PKTIF) {
-                log("PKTIF interrupt");
-                SetBank(EIR);
-                writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
-        }
-
-        if(interrupt & EIR_TXIF) {
-                log("TXIF interrupt");
-
-                SetBank(EIR);
-                writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
-        }
-
-        if(interrupt & EIR_TXERIF) {
-                log("TXERIF int");
-                SetBank(EIR);
-                writeOp(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
-        }
-        ETS_GPIO_INTR_ENABLE();
-        */
 }
 
 // http://lwip.wikia.com/wiki/Writing_a_device_driver
 
 err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
-        ETS_GPIO_INTR_ATTACH(interrupt_handler, &interrupt_reg);
-        ETS_GPIO_INTR_ENABLE();
-
-        gpio_register_set(GPIO_PIN_ADDR(ESP_INT), GPIO_PIN_INT_TYPE_SET(GPIO_PIN_INTR_DISABLE)
-                | GPIO_PIN_PAD_DRIVER_SET(GPIO_PAD_DRIVER_DISABLE)
-                | GPIO_PIN_SOURCE_SET(GPIO_AS_PIN_SOURCE));
-
-        GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << ESP_INT);
-        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
-
-        log("interrupts enabled");
         log("initializing");
         netif->linkoutput = enc28j60_link_output;
         netif->name[0] = 'e';
@@ -476,15 +410,27 @@ err_t ICACHE_FLASH_ATTR enc28j60_init(struct netif *netif) {
         if(rev > 5) ++rev;
         log("hardware ready, rev: %d", rev);
 
+        // You should __ALWAYS__ start ISR's __LAST__
+        ETS_GPIO_INTR_ATTACH(interrupt_handler, &interrupt_reg);
+        ETS_GPIO_INTR_ENABLE();
+
+        gpio_register_set(GPIO_PIN_ADDR(ESP_INT), GPIO_PIN_INT_TYPE_SET(GPIO_PIN_INTR_DISABLE)
+                | GPIO_PIN_PAD_DRIVER_SET(GPIO_PAD_DRIVER_DISABLE)
+                | GPIO_PIN_SOURCE_SET(GPIO_AS_PIN_SOURCE));
+
+        GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << ESP_INT);
+        gpio_pin_intr_state_set(GPIO_ID_PIN(ESP_INT), GPIO_PIN_INTR_LOLEVEL);
+
+        log("interrupts enabled");
+
         return ERR_OK;
 }
-
 
 struct netif* espenc_init(uint8_t *mac_addr, ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw, bool dhcp) {
         ip_addr_t nulladdr;
         struct netif* new_netif;
 
-	system_os_task(swint_Task, swint_TaskPrio, swint_TaskQueue, swint_TaskQueueLen);
+        system_os_task(swint_Task, swint_TaskPrio, swint_TaskQueue, swint_TaskQueueLen);
 
         IP4_ADDR(&nulladdr, 0, 0, 0, 0);
 
