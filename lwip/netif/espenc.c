@@ -342,7 +342,7 @@ void interrupt_handler(void *arg) {
 
                 if(pktCnt > 0 && (interrupt & EIR_PKTIF)) {
                         log("pktCnt > 0");
-#if ENC_SCOOPS
+#if 1
        // ACK interrupt
                         GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT(ESP_INT));
 
