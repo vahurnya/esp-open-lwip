@@ -293,6 +293,8 @@ struct portmap_table *ip_portmap_table;
 int nr_active_napt_tcp = 0, nr_active_napt_udp = 0, nr_active_napt_icmp = 0;
 uint16_t ip_napt_max = 0;
 uint8_t ip_portmap_max = 0;
+uint32_t ip_napt_tcp_timeout = IP_NAPT_TIMEOUT_MS_TCP;
+uint32_t ip_napt_udp_timeout = IP_NAPT_TIMEOUT_MS_UDP;
 
 void ICACHE_FLASH_ATTR
 ip_napt_init(uint16_t max_nat, uint8_t max_portmap)
@@ -517,13 +519,13 @@ ip_napt_find(u8_t proto, u32_t addr, u16_t port, u16_t mport, u8_t dest)
     if (t->proto == IP_PROTO_TCP &&
         (((t->finack1 && t->finack2 || !t->synack) &&
           now - t->last > IP_NAPT_TIMEOUT_MS_TCP_DISCON) ||
-         now - t->last > IP_NAPT_TIMEOUT_MS_TCP)) {
+         now - t->last > ip_napt_tcp_timeout)) {
       ip_napt_free(t);
       continue;
     }
 #endif
 #if LWIP_UDP
-    if (t->proto == IP_PROTO_UDP && now - t->last > IP_NAPT_TIMEOUT_MS_UDP) {
+    if (t->proto == IP_PROTO_UDP && now - t->last > ip_napt_udp_timeout) {
       ip_napt_free(t);
       continue;
     }
@@ -666,7 +668,15 @@ ip_portmap_remove(u8_t proto, u16_t mport)
   return 1;
 }
 
+
 #if LWIP_TCP
+void ICACHE_FLASH_ATTR
+ip_napt_set_tcp_timeout(u32_t secs)
+{
+  ip_napt_tcp_timeout = secs * 1000;
+}
+
+
 void ICACHE_FLASH_ATTR
 ip_napt_modify_port_tcp(struct tcp_hdr *tcphdr, u8_t dest, u16_t newval)
 {
@@ -688,6 +698,13 @@ ip_napt_modify_addr_tcp(struct tcp_hdr *tcphdr, ip_addr_p_t *oldval, u32_t newva
 #endif // LWIP_TCP
 
 #if LWIP_UDP
+void ICACHE_FLASH_ATTR
+ip_napt_set_udp_timeout(u32_t secs)
+{
+  ip_napt_udp_timeout = secs * 1000;
+}
+
+
 void ICACHE_FLASH_ATTR
 ip_napt_modify_port_udp(struct udp_hdr *udphdr, u8_t dest, u16_t newval)
 {
