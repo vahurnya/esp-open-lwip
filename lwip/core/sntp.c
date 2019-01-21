@@ -114,7 +114,7 @@
  * Turned off by default.
  */
 #ifndef SNTP_STARTUP_DELAY
-#define SNTP_STARTUP_DELAY          0
+#define SNTP_STARTUP_DELAY          1000
 #endif
 
 /** If you want the startup delay to be a function, define this
