@@ -237,6 +237,10 @@ static inline u32_t sys_now(void)
 	return NOW()/(TIMER_CLK_FREQ/1000);
 }
 
+/** Get the absolute difference between 2 sys_now values (correcting overflows)
+ * 'a' is expected to be 'higher' (without overflow) than 'b'. */
+#define LWIP_TIME_DIFF(a, b) (((a) >= (b)) ? ((a) - (b)) : (((a) + ((b) ^ (0xFFFFFFFF/(TIMER_CLK_FREQ/1000))) + 1)))
+
 /* Critical Region Protection */
 /* These functions must be implemented in the sys_arch.c file.
    In some implementations they can provide a more light-weight protection
