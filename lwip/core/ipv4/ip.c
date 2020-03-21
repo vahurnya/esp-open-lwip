@@ -518,20 +518,20 @@ ip_napt_find(u8_t proto, u32_t addr, u16_t port, u16_t mport, u8_t dest)
 #if LWIP_TCP
     if (t->proto == IP_PROTO_TCP &&
         (((t->finack1 && t->finack2 || !t->synack) &&
-          now - t->last > IP_NAPT_TIMEOUT_MS_TCP_DISCON) ||
-         now - t->last > ip_napt_tcp_timeout)) {
+	  LWIP_TIME_DIFF(now, t->last) > IP_NAPT_TIMEOUT_MS_TCP_DISCON) ||
+	  LWIP_TIME_DIFF(now, t->last) > ip_napt_tcp_timeout)) {
       ip_napt_free(t);
       continue;
     }
 #endif
 #if LWIP_UDP
-    if (t->proto == IP_PROTO_UDP && now - t->last > ip_napt_udp_timeout) {
+    if (t->proto == IP_PROTO_UDP && LWIP_TIME_DIFF(now, t->last) > ip_napt_udp_timeout) {
       ip_napt_free(t);
       continue;
     }
 #endif
 #if LWIP_ICMP
-    if (t->proto == IP_PROTO_ICMP && now - t->last > IP_NAPT_TIMEOUT_MS_ICMP) {
+    if (t->proto == IP_PROTO_ICMP && LWIP_TIME_DIFF(now, t->last) > IP_NAPT_TIMEOUT_MS_ICMP) {
       ip_napt_free(t);
       continue;
     }
